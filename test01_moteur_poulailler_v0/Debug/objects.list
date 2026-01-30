@@ -14,6 +14,7 @@
 "./Drivers/STM32U0xx_HAL_Driver/Src/stm32u0xx_hal_flash.o"
 "./Drivers/STM32U0xx_HAL_Driver/Src/stm32u0xx_hal_flash_ex.o"
 "./Drivers/STM32U0xx_HAL_Driver/Src/stm32u0xx_hal_gpio.o"
+"./Drivers/STM32U0xx_HAL_Driver/Src/stm32u0xx_hal_lptim.o"
 "./Drivers/STM32U0xx_HAL_Driver/Src/stm32u0xx_hal_pwr.o"
 "./Drivers/STM32U0xx_HAL_Driver/Src/stm32u0xx_hal_pwr_ex.o"
 "./Drivers/STM32U0xx_HAL_Driver/Src/stm32u0xx_hal_rcc.o"

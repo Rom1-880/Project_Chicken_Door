@@ -26,6 +26,8 @@ Drivers/BSP/STM32U0xx_Nucleo/stm32u0xx_nucleo.o: \
  ../Drivers/STM32U0xx_HAL_Driver/Inc/stm32u0xx_hal_exti.h \
  ../Drivers/STM32U0xx_HAL_Driver/Inc/stm32u0xx_hal_flash.h \
  ../Drivers/STM32U0xx_HAL_Driver/Inc/stm32u0xx_hal_flash_ex.h \
+ ../Drivers/STM32U0xx_HAL_Driver/Inc/stm32u0xx_hal_lptim.h \
+ ../Drivers/STM32U0xx_HAL_Driver/Inc/stm32u0xx_ll_lptim.h \
  ../Drivers/STM32U0xx_HAL_Driver/Inc/stm32u0xx_hal_pwr.h \
  ../Drivers/STM32U0xx_HAL_Driver/Inc/stm32u0xx_hal_pwr_ex.h \
  ../Drivers/STM32U0xx_HAL_Driver/Inc/stm32u0xx_hal_tim.h \
@@ -59,6 +61,8 @@ Drivers/BSP/STM32U0xx_Nucleo/stm32u0xx_nucleo.o: \
 ../Drivers/STM32U0xx_HAL_Driver/Inc/stm32u0xx_hal_exti.h:
 ../Drivers/STM32U0xx_HAL_Driver/Inc/stm32u0xx_hal_flash.h:
 ../Drivers/STM32U0xx_HAL_Driver/Inc/stm32u0xx_hal_flash_ex.h:
+../Drivers/STM32U0xx_HAL_Driver/Inc/stm32u0xx_hal_lptim.h:
+../Drivers/STM32U0xx_HAL_Driver/Inc/stm32u0xx_ll_lptim.h:
 ../Drivers/STM32U0xx_HAL_Driver/Inc/stm32u0xx_hal_pwr.h:
 ../Drivers/STM32U0xx_HAL_Driver/Inc/stm32u0xx_hal_pwr_ex.h:
 ../Drivers/STM32U0xx_HAL_Driver/Inc/stm32u0xx_hal_tim.h:

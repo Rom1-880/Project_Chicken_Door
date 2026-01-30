@@ -1,5 +1,5 @@
-Drivers/STM32U0xx_HAL_Driver/Src/stm32u0xx_hal_uart_ex.o: \
- ../Drivers/STM32U0xx_HAL_Driver/Src/stm32u0xx_hal_uart_ex.c \
+Drivers/STM32U0xx_HAL_Driver/Src/stm32u0xx_hal_lptim.o: \
+ ../Drivers/STM32U0xx_HAL_Driver/Src/stm32u0xx_hal_lptim.c \
  ../Drivers/STM32U0xx_HAL_Driver/Inc/stm32u0xx_hal.h \
  ../Core/Inc/stm32u0xx_hal_conf.h \
  ../Drivers/STM32U0xx_HAL_Driver/Inc/stm32u0xx_hal_rcc.h \

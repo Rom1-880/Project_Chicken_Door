@@ -43,42 +43,63 @@
 
 COM_InitTypeDef BspCOMInit;
 
+LPTIM_HandleTypeDef hlptim1;
+
 TIM_HandleTypeDef htim1;
 
 /* USER CODE BEGIN PV */
-
+uint16_t current_speed = 0;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
 void SystemClock_Config(void);
 static void MX_GPIO_Init(void);
 static void MX_TIM1_Init(void);
+static void MX_LPTIM1_Init(void);
 /* USER CODE BEGIN PFP */
 
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
-void Motor_SetSpeed(uint16_t speed)
-{
-    if (speed > 1000) speed = 1000;
-    __HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_1, speed);
-}
 
 void Motor_Forward(void)
 {
+    // 1. On s'assure que le LPTIM ne génère plus de signal sur PB2
+    HAL_LPTIM_PWM_Stop(&hlptim1, LPTIM_CHANNEL_1);
+    // On force PB2 à 0 (GND) via le GPIO
     HAL_GPIO_WritePin(GPIOB, GPIO_PIN_2, GPIO_PIN_RESET);
+
+    // 2. On envoie le PWM sur PA11
+    __HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_4, current_speed);
+    HAL_TIM_PWM_Start(&htim1, TIM_CHANNEL_4);
 }
 
 void Motor_Reverse(void)
 {
-    HAL_GPIO_WritePin(GPIOB, GPIO_PIN_2, GPIO_PIN_SET);
+    // 1. On arrête le PWM sur PA11 et on force à 0
+    HAL_TIM_PWM_Stop(&htim1, TIM_CHANNEL_4);
+    HAL_GPIO_WritePin(GPIOA, GPIO_PIN_11, GPIO_PIN_RESET);
+
+    // 2. On lance le PWM sur PB2 via le LPTIM
+    __HAL_LPTIM_COMPARE_SET(&hlptim1, LPTIM_CHANNEL_1, current_speed);
+    HAL_LPTIM_PWM_Start(&hlptim1, LPTIM_CHANNEL_1);
 }
 
 void Motor_Stop(void)
 {
-    __HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_1, 0);
+    HAL_TIM_PWM_Stop(&htim1, TIM_CHANNEL_4);
+    HAL_LPTIM_PWM_Stop(&hlptim1, LPTIM_CHANNEL_1);
+    HAL_GPIO_WritePin(GPIOA, GPIO_PIN_11, GPIO_PIN_RESET);
+    HAL_GPIO_WritePin(GPIOB, GPIO_PIN_2, GPIO_PIN_RESET);
 }
+
+void Motor_SetSpeed(uint16_t speed)
+{
+    if (speed > 999) speed = 999;
+    current_speed = speed;
+}
+
 /* USER CODE END 0 */
 
 /**
@@ -111,12 +132,15 @@ int main(void)
   /* Initialize all configured peripherals */
   MX_GPIO_Init();
   MX_TIM1_Init();
+  MX_LPTIM1_Init();
   /* USER CODE BEGIN 2 */
-  HAL_TIM_PWM_Start(&htim1, TIM_CHANNEL_1);
+  HAL_TIM_PWM_Start(&htim1, TIM_CHANNEL_4); // Changé de CHANNEL_1 à CHANNEL_4
   __HAL_TIM_MOE_ENABLE(&htim1);
-  __HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_1, 500);
-//  __HAL_TIM_SET_COMPARE(&htim2, TIM_CHANNEL_1, 500);
 
+  if (HAL_LPTIM_PWM_Start(&hlptim1, LPTIM_CHANNEL_1) != HAL_OK)
+  {
+      Error_Handler();
+  }
   /* USER CODE END 2 */
 
   /* Initialize USER push-button, will be used to trigger an interrupt each time it's pressed.*/
@@ -137,16 +161,21 @@ int main(void)
   /* USER CODE BEGIN WHILE */
   while (1)
   {
-	  /*char i=0;
-	  for (i=0;i<11;i++)
-	  {
-		  __HAL_TIM_SET_COMPARE(&htim2, TIM_CHANNEL_1, (i*192));
-		  HAL_Delay(1000);
-	  }*/
+	        Motor_SetSpeed(500);
+	        Motor_Forward();
+	        HAL_Delay(3000);
+
+	        Motor_SetSpeed(500);
+	        Motor_Reverse();
+	        HAL_Delay(3000);
+
+	        Motor_Stop();
+	        HAL_Delay(3000);
+
     /* USER CODE END WHILE */
-/* ou i */
+
     /* USER CODE BEGIN 3 */
-	  Motor_Forward();
+	 /* Motor_Forward();
 	    Motor_SetSpeed(500);
 
 	    HAL_Delay(3000);
@@ -159,7 +188,9 @@ int main(void)
 	    Motor_Stop();
 
 	    HAL_Delay(3000);
+	    */
   }
+
   /* USER CODE END 3 */
 }
 
@@ -204,6 +235,50 @@ void SystemClock_Config(void)
 }
 
 /**
+  * @brief LPTIM1 Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_LPTIM1_Init(void)
+{
+
+  /* USER CODE BEGIN LPTIM1_Init 0 */
+
+  /* USER CODE END LPTIM1_Init 0 */
+
+  LPTIM_OC_ConfigTypeDef sConfig1 = {0};
+
+  /* USER CODE BEGIN LPTIM1_Init 1 */
+
+  /* USER CODE END LPTIM1_Init 1 */
+  hlptim1.Instance = LPTIM1;
+  hlptim1.Init.Clock.Source = LPTIM_CLOCKSOURCE_APBCLOCK_LPOSC;
+  hlptim1.Init.Clock.Prescaler = LPTIM_PRESCALER_DIV1;
+  hlptim1.Init.Trigger.Source = LPTIM_TRIGSOURCE_SOFTWARE;
+  hlptim1.Init.Period = 999;
+  hlptim1.Init.UpdateMode = LPTIM_UPDATE_IMMEDIATE;
+  hlptim1.Init.CounterSource = LPTIM_COUNTERSOURCE_INTERNAL;
+  hlptim1.Init.Input1Source = LPTIM_INPUT1SOURCE_GPIO;
+  hlptim1.Init.Input2Source = LPTIM_INPUT2SOURCE_GPIO;
+  hlptim1.Init.RepetitionCounter = 0;
+  if (HAL_LPTIM_Init(&hlptim1) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  sConfig1.Pulse = 0;
+  sConfig1.OCPolarity = LPTIM_OCPOLARITY_HIGH;
+  if (HAL_LPTIM_OC_ConfigChannel(&hlptim1, &sConfig1, LPTIM_CHANNEL_1) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN LPTIM1_Init 2 */
+
+  /* USER CODE END LPTIM1_Init 2 */
+  HAL_LPTIM_MspPostInit(&hlptim1);
+
+}
+
+/**
   * @brief TIM1 Initialization Function
   * @param None
   * @retval None
@@ -228,7 +303,7 @@ static void MX_TIM1_Init(void)
   htim1.Init.Period = 999;
   htim1.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
   htim1.Init.RepetitionCounter = 0;
-  htim1.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_ENABLE;
+  htim1.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
   if (HAL_TIM_PWM_Init(&htim1) != HAL_OK)
   {
     Error_Handler();
@@ -243,11 +318,10 @@ static void MX_TIM1_Init(void)
   sConfigOC.OCMode = TIM_OCMODE_PWM1;
   sConfigOC.Pulse = 0;
   sConfigOC.OCPolarity = TIM_OCPOLARITY_HIGH;
-  sConfigOC.OCNPolarity = TIM_OCNPOLARITY_HIGH;
   sConfigOC.OCFastMode = TIM_OCFAST_DISABLE;
   sConfigOC.OCIdleState = TIM_OCIDLESTATE_RESET;
   sConfigOC.OCNIdleState = TIM_OCNIDLESTATE_RESET;
-  if (HAL_TIM_PWM_ConfigChannel(&htim1, &sConfigOC, TIM_CHANNEL_1) != HAL_OK)
+  if (HAL_TIM_PWM_ConfigChannel(&htim1, &sConfigOC, TIM_CHANNEL_4) != HAL_OK)
   {
     Error_Handler();
   }
@@ -291,16 +365,6 @@ static void MX_GPIO_Init(void)
   __HAL_RCC_GPIOF_CLK_ENABLE();
   __HAL_RCC_GPIOB_CLK_ENABLE();
   __HAL_RCC_GPIOA_CLK_ENABLE();
-
-  /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(GPIOB, GPIO_PIN_2, GPIO_PIN_RESET);
-
-  /*Configure GPIO pin : PB2 */
-  GPIO_InitStruct.Pin = GPIO_PIN_2;
-  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
-  GPIO_InitStruct.Pull = GPIO_NOPULL;
-  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
-  HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
 
   /*Configure GPIO pins : I2C1_SCL_Pin I2C1_SDA_Pin */
   GPIO_InitStruct.Pin = I2C1_SCL_Pin|I2C1_SDA_Pin;
