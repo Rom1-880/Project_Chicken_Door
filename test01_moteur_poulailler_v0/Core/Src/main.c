@@ -72,7 +72,7 @@ void Motor_Forward(void)
 {
     // 1. On s'assure que le LPTIM ne génère plus de signal sur PB2
     HAL_LPTIM_PWM_Stop(&hlptim1, LPTIM_CHANNEL_1);
-    // On force PB2 à 0 (GND) via le GPIO.
+    // On force PB2 à 0 (GND) via le GPIO
     HAL_GPIO_WritePin(GPIOB, GPIO_PIN_2, GPIO_PIN_RESET);
 
     // 2. On envoie le PWM sur PA11
