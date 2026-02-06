@@ -62,7 +62,7 @@ static void MX_GPIO_Init(void);
 static void MX_TIM1_Init(void);
 static void MX_LPTIM1_Init(void);
 /* USER CODE BEGIN PFP */
-
+//test
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
@@ -296,7 +296,7 @@ static void MX_LPTIM1_Init(void)
     Error_Handler();
   }
   sConfig1.Pulse = 0;
-  sConfig1.OCPolarity = LPTIM_OCPOLARITY_HIGH;
+  sConfig1.OCPolarity = LPTIM_OCPOLARITY_LOW;
   if (HAL_LPTIM_OC_ConfigChannel(&hlptim1, &sConfig1, LPTIM_CHANNEL_1) != HAL_OK)
   {
     Error_Handler();
