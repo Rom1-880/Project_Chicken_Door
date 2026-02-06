@@ -48,7 +48,12 @@ LPTIM_HandleTypeDef hlptim1;
 TIM_HandleTypeDef htim1;
 
 /* USER CODE BEGIN PV */
-uint16_t current_speed = 0;
+uint16_t current_speed = 900; // On fixe une vitesse par défaut pour les tests
+uint8_t rx_data;              // Variable pour stocker le caractère reçu
+extern UART_HandleTypeDef hcom_uart[];
+
+char msg[50]; // Buffer pour construire les messages texte
+
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -97,7 +102,15 @@ void Motor_Stop(void)
 void Motor_SetSpeed(uint16_t speed)
 {
     if (speed > 999) speed = 999;
+    if (speed > 0 && speed < 700) speed = 700;
     current_speed = speed;
+    uint8_t rx_data = 0;
+    extern UART_HandleTypeDef hcom_uart[];
+
+    // Mise à jour immédiate des registres pour les deux timers
+    __HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_4, current_speed);
+    __HAL_LPTIM_COMPARE_SET(&hlptim1, LPTIM_CHANNEL_1, current_speed);
+
 }
 
 /* USER CODE END 0 */
@@ -110,7 +123,7 @@ int main(void)
 {
 
   /* USER CODE BEGIN 1 */
-//t
+
   /* USER CODE END 1 */
 
   /* MCU Configuration--------------------------------------------------------*/
@@ -161,7 +174,7 @@ int main(void)
   /* USER CODE BEGIN WHILE */
   while (1)
   {
-	        Motor_SetSpeed(500);
+	      /*  Motor_SetSpeed(500);
 	        Motor_Forward();
 	        HAL_Delay(3000);
 
@@ -170,25 +183,42 @@ int main(void)
 	        HAL_Delay(3000);
 
 	        Motor_Stop();
-	        HAL_Delay(3000);
+	        HAL_Delay(3000); */ // Code test rotation moteur, dans les deux sens + stop
+
+	  // On écoute le port série (115200 baud)
+	      if (HAL_UART_Receive(&hcom_uart[COM1], &rx_data, 1, 10) == HAL_OK)
+	      {
+	        // Echo : on renvoie le caractère au PC pour confirmer
+	        HAL_UART_Transmit(&hcom_uart[COM1], &rx_data, 1, 10);
+
+	        // 1. On traite la commande
+	        switch(rx_data)
+	        {
+	          case 'D': Motor_Forward(); break;
+	          case 'A': Motor_Reverse(); break;
+	          case 'S': Motor_Stop();    break;
+
+	          // Bonus : réglage de la vitesse au clavier
+	          case '+': Motor_SetSpeed(current_speed + 100); break;
+	          case '-': Motor_SetSpeed(current_speed - 100); break;
+	        }
+
+	        // 2. On prépare le message texte (ex: "\r\nVitesse: 800\r\n")
+	                // \r\n sert à revenir à la ligne dans ton terminal
+	                sprintf(msg, "\r\nCommande: %c | Vitesse: %d\r\n", rx_data, current_speed);
+
+	                // 3. On envoie le texte converti
+	                HAL_UART_Transmit(&hcom_uart[COM1], (uint8_t*)msg, strlen(msg), 100);
+	    }
+
+	      /* USER CODE END WHILE */
+
+
 
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
-	 /* Motor_Forward();
-	    Motor_SetSpeed(500);
 
-	    HAL_Delay(3000);
-
-	    Motor_Reverse();
-	    Motor_SetSpeed(800);
-
-	    HAL_Delay(3000);
-
-	    Motor_Stop();
-
-	    HAL_Delay(3000);
-	    */
   }
 
   /* USER CODE END 3 */
@@ -253,7 +283,7 @@ static void MX_LPTIM1_Init(void)
   /* USER CODE END LPTIM1_Init 1 */
   hlptim1.Instance = LPTIM1;
   hlptim1.Init.Clock.Source = LPTIM_CLOCKSOURCE_APBCLOCK_LPOSC;
-  hlptim1.Init.Clock.Prescaler = LPTIM_PRESCALER_DIV1;
+  hlptim1.Init.Clock.Prescaler = LPTIM_PRESCALER_DIV64;
   hlptim1.Init.Trigger.Source = LPTIM_TRIGSOURCE_SOFTWARE;
   hlptim1.Init.Period = 999;
   hlptim1.Init.UpdateMode = LPTIM_UPDATE_IMMEDIATE;
