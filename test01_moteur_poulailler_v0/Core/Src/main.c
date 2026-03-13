@@ -1,54 +1,59 @@
 /* USER CODE BEGIN Header */
 /**
-  ******************************************************************************
-  * @file           : main.c
-  * @brief          : Main program body
-  ******************************************************************************
-  * @attention
-  *
-  * Copyright (c) 2026 STMicroelectronics.
-  * All rights reserved.
-  *
-  * This software is licensed under terms that can be found in the LICENSE file
-  * in the root directory of this software component.
-  * If no LICENSE file comes with this software, it is provided AS-IS.
-  *
-  ******************************************************************************
-  */
+ ******************************************************************************
+ * @file           : main.c
+ * @brief          : Main program body
+ ******************************************************************************
+ * @attention
+ *
+ * Copyright (c) 2026 STMicroelectronics.
+ * All rights reserved.
+ *
+ * This software is licensed under terms that can be found in the LICENSE file
+ * in the root directory of this software component.
+ * If no LICENSE file comes with this software, it is provided AS-IS.
+ *
+ ******************************************************************************
+ */
 /* USER CODE END Header */
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
-
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
 /* USER CODE BEGIN PTD */
-
 /* USER CODE END PTD */
 
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
-
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
 /* USER CODE BEGIN PM */
-
 /* USER CODE END PM */
 
 /* Private variables ---------------------------------------------------------*/
 
 COM_InitTypeDef BspCOMInit;
+ADC_HandleTypeDef hadc1;
 
 LPTIM_HandleTypeDef hlptim1;
 
 TIM_HandleTypeDef htim1;
 
 /* USER CODE BEGIN PV */
-uint16_t current_speed = 0;
+uint16_t current_speed = 900; // On fixe une vitesse par défaut pour les tests
+uint8_t rx_data;              // Variable pour stocker le caractère reçu
+extern UART_HandleTypeDef hcom_uart[];
+char msg[50]; // Buffer pour construire les messages texte
+// lecture courant moteur
+uint32_t adc_value = 0;
+float motor_current = 0.0;
+const float CURRENT_THRESHOLD = 0.8; // Seuil de blocage à 800mA (à ajuster)
+uint32_t last_tick = 0; // Pour l'envoi périodique
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -56,50 +61,66 @@ void SystemClock_Config(void);
 static void MX_GPIO_Init(void);
 static void MX_TIM1_Init(void);
 static void MX_LPTIM1_Init(void);
+static void MX_ADC1_Init(void);
 /* USER CODE BEGIN PFP */
-
+//test
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
-
 void Motor_Forward(void)
 {
-    // 1. On s'assure que le LPTIM ne génère plus de signal sur PB2
-    HAL_LPTIM_PWM_Stop(&hlptim1, LPTIM_CHANNEL_1);
-    // On force PB2 à 0 (GND) via le GPIO
-    HAL_GPIO_WritePin(GPIOB, GPIO_PIN_2, GPIO_PIN_RESET);
-
-    // 2. On envoie le PWM sur PA11
-    __HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_4, current_speed);
-    HAL_TIM_PWM_Start(&htim1, TIM_CHANNEL_4);
+   // 1. On s'assure que le LPTIM ne génère plus de signal sur PB2
+   HAL_LPTIM_PWM_Stop(&hlptim1, LPTIM_CHANNEL_1);
+   // On force PB2 à 0 (GND) via le GPIO
+   HAL_GPIO_WritePin(GPIOB, GPIO_PIN_2, GPIO_PIN_RESET);
+   // 2. On envoie le PWM sur PA11
+   __HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_4, current_speed);
+   HAL_TIM_PWM_Start(&htim1, TIM_CHANNEL_4);
 }
-
 void Motor_Reverse(void)
 {
-    // 1. On arrête le PWM sur PA11 et on force à 0
-    HAL_TIM_PWM_Stop(&htim1, TIM_CHANNEL_4);
-    HAL_GPIO_WritePin(GPIOA, GPIO_PIN_11, GPIO_PIN_RESET);
-
-    // 2. On lance le PWM sur PB2 via le LPTIM
-    __HAL_LPTIM_COMPARE_SET(&hlptim1, LPTIM_CHANNEL_1, current_speed);
-    HAL_LPTIM_PWM_Start(&hlptim1, LPTIM_CHANNEL_1);
+   // 1. On arrête le PWM sur PA11 et on force à 0
+   HAL_TIM_PWM_Stop(&htim1, TIM_CHANNEL_4);
+   HAL_GPIO_WritePin(GPIOA, GPIO_PIN_11, GPIO_PIN_RESET);
+   // 2. On lance le PWM sur PB2 via le LPTIM
+   __HAL_LPTIM_COMPARE_SET(&hlptim1, LPTIM_CHANNEL_1, current_speed);
+   HAL_LPTIM_PWM_Start(&hlptim1, LPTIM_CHANNEL_1);
 }
-
 void Motor_Stop(void)
 {
-    HAL_TIM_PWM_Stop(&htim1, TIM_CHANNEL_4);
-    HAL_LPTIM_PWM_Stop(&hlptim1, LPTIM_CHANNEL_1);
-    HAL_GPIO_WritePin(GPIOA, GPIO_PIN_11, GPIO_PIN_RESET);
-    HAL_GPIO_WritePin(GPIOB, GPIO_PIN_2, GPIO_PIN_RESET);
+   HAL_TIM_PWM_Stop(&htim1, TIM_CHANNEL_4);
+   HAL_LPTIM_PWM_Stop(&hlptim1, LPTIM_CHANNEL_1);
+   HAL_GPIO_WritePin(GPIOA, GPIO_PIN_11, GPIO_PIN_RESET);
+   HAL_GPIO_WritePin(GPIOB, GPIO_PIN_2, GPIO_PIN_RESET);
 }
-
 void Motor_SetSpeed(uint16_t speed)
 {
-    if (speed > 999) speed = 999;
-    current_speed = speed;
+   if (speed > 999) speed = 999;
+   if (speed > 0 && speed < 700) speed = 700;
+   current_speed = speed;
+   uint8_t rx_data = 0;
+   extern UART_HandleTypeDef hcom_uart[];
+   // Mise à jour immédiate des registres pour les deux timers
+   __HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_4, current_speed);
+   __HAL_LPTIM_COMPARE_SET(&hlptim1, LPTIM_CHANNEL_1, current_speed);
 }
-
+// Lecture courant moteur
+float Get_Motor_Current(void)
+{
+   extern ADC_HandleTypeDef hadc1;
+   uint32_t raw_value = 0;
+   float res_ohm = 2.0f; // Ta résistance réelle de 2 Ohms
+   HAL_ADC_Start(&hadc1);
+   if (HAL_ADC_PollForConversion(&hadc1, 10) == HAL_OK) {
+       adc_value = HAL_ADC_GetValue(&hadc1);
+       // Formule : Courant = Tension / Résistance
+       // Tension = (Valeur_ADC / 4095) * 3.3V
+       motor_current = ((adc_value * 3.3f) / 4095.0f) / res_ohm;
+   }
+   HAL_ADC_Stop(&hadc1);
+   return motor_current;
+}
 /* USER CODE END 0 */
 
 /**
@@ -110,7 +131,6 @@ int main(void)
 {
 
   /* USER CODE BEGIN 1 */
-//t
   /* USER CODE END 1 */
 
   /* MCU Configuration--------------------------------------------------------*/
@@ -119,28 +139,26 @@ int main(void)
   HAL_Init();
 
   /* USER CODE BEGIN Init */
-
   /* USER CODE END Init */
 
   /* Configure the system clock */
   SystemClock_Config();
 
   /* USER CODE BEGIN SysInit */
-
   /* USER CODE END SysInit */
 
   /* Initialize all configured peripherals */
   MX_GPIO_Init();
   MX_TIM1_Init();
   MX_LPTIM1_Init();
+  MX_ADC1_Init();
   /* USER CODE BEGIN 2 */
-  HAL_TIM_PWM_Start(&htim1, TIM_CHANNEL_4); // Changé de CHANNEL_1 à CHANNEL_4
-  __HAL_TIM_MOE_ENABLE(&htim1);
-
-  if (HAL_LPTIM_PWM_Start(&hlptim1, LPTIM_CHANNEL_1) != HAL_OK)
-  {
-      Error_Handler();
-  }
+ HAL_TIM_PWM_Start(&htim1, TIM_CHANNEL_4); // Changé de CHANNEL_1 à CHANNEL_4
+ __HAL_TIM_MOE_ENABLE(&htim1);
+ if (HAL_LPTIM_PWM_Start(&hlptim1, LPTIM_CHANNEL_1) != HAL_OK)
+ {
+     Error_Handler();
+ }
   /* USER CODE END 2 */
 
   /* Initialize USER push-button, will be used to trigger an interrupt each time it's pressed.*/
@@ -159,38 +177,53 @@ int main(void)
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
-  while (1)
-  {
-	        Motor_SetSpeed(500);
-	        Motor_Forward();
-	        HAL_Delay(3000);
-
-	        Motor_SetSpeed(500);
-	        Motor_Reverse();
-	        HAL_Delay(3000);
-
-	        Motor_Stop();
-	        HAL_Delay(3000);
-
+ while (1)
+ {
+	  // On écoute le port série (115200 baud)
+	      if (HAL_UART_Receive(&hcom_uart[COM1], &rx_data, 1, 10) == HAL_OK)
+	      {
+	        // Echo : on renvoie le caractère au PC pour confirmer
+	        HAL_UART_Transmit(&hcom_uart[COM1], &rx_data, 1, 10);
+	        // On traite la commande
+	        switch(rx_data)
+	        {
+	          case 'D': Motor_Forward(); break;
+	          case 'A': Motor_Reverse(); break;
+	          case 'S': Motor_Stop();    break;
+	          // Bonus : réglage de la vitesse au clavier
+	          case '+': Motor_SetSpeed(current_speed + 100); break;
+	          case '-': Motor_SetSpeed(current_speed - 100); break;
+	        }
+	        // On prépare le message texte
+	                // \r\n sert à revenir à la ligne dans ton terminal
+	                sprintf(msg, "\r\nCommande: %c | Vitesse: %d\r\n", rx_data, current_speed);
+	        // On envoie le texte converti
+	        HAL_UART_Transmit(&hcom_uart[COM1], (uint8_t*)msg, strlen(msg), 100);
+	    }
+	      // Mesure du courant et sécurité blocage
+	      uint32_t current_time = HAL_GetTick();
+	            if (current_time - last_tick >= 500)
+	            {
+	                last_tick = current_time;
+	                float current = Get_Motor_Current();
+	                // SÉCURITÉ : On ne vérifie le blocage QUE SI le moteur est censé tourner
+	                // (On vérifie si la vitesse est > 0 et si on n'est pas à l'arrêt)
+	                if (current_speed > 0 && current > CURRENT_THRESHOLD)
+	                {
+	                   // Motor_Stop();
+	                   // current_speed = 0; // On remet la vitesse à 0 pour arrêter l'alerte
+	                    // Message d'alerte avec la valeur du courant fautif
+	                    int len_err = sprintf(msg, "\r\n!! STOP : BLOCAGE DETECTE (%.2f A) !!\r\n", current);
+	                    HAL_UART_Transmit(&hcom_uart[COM1], (uint8_t*)msg, len_err, 100);
+	                }
+	                // Affichage normal de monitoring
+	                int len = sprintf(msg, "I: %.2f A | Spd: %d | ADC: %lu\r\n", current, current_speed, adc_value);
+	                HAL_UART_Transmit(&hcom_uart[COM1], (uint8_t*)msg, len, 50);
+	            }
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
-	 /* Motor_Forward();
-	    Motor_SetSpeed(500);
-
-	    HAL_Delay(3000);
-
-	    Motor_Reverse();
-	    Motor_SetSpeed(800);
-
-	    HAL_Delay(3000);
-
-	    Motor_Stop();
-
-	    HAL_Delay(3000);
-	    */
-  }
-
+ }
   /* USER CODE END 3 */
 }
 
@@ -235,6 +268,62 @@ void SystemClock_Config(void)
 }
 
 /**
+  * @brief ADC1 Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_ADC1_Init(void)
+{
+
+  /* USER CODE BEGIN ADC1_Init 0 */
+  /* USER CODE END ADC1_Init 0 */
+
+  ADC_ChannelConfTypeDef sConfig = {0};
+
+  /* USER CODE BEGIN ADC1_Init 1 */
+  /* USER CODE END ADC1_Init 1 */
+
+  /** Configure the global features of the ADC (Clock, Resolution, Data Alignment and number of conversion)
+  */
+  hadc1.Instance = ADC1;
+  hadc1.Init.ClockPrescaler = ADC_CLOCK_SYNC_PCLK_DIV1;
+  hadc1.Init.Resolution = ADC_RESOLUTION_12B;
+  hadc1.Init.DataAlign = ADC_DATAALIGN_RIGHT;
+  hadc1.Init.ScanConvMode = ADC_SCAN_DISABLE;
+  hadc1.Init.EOCSelection = ADC_EOC_SINGLE_CONV;
+  hadc1.Init.LowPowerAutoWait = DISABLE;
+  hadc1.Init.LowPowerAutoPowerOff = DISABLE;
+  hadc1.Init.ContinuousConvMode = DISABLE;
+  hadc1.Init.NbrOfConversion = 1;
+  hadc1.Init.DiscontinuousConvMode = DISABLE;
+  hadc1.Init.ExternalTrigConv = ADC_SOFTWARE_START;
+  hadc1.Init.ExternalTrigConvEdge = ADC_EXTERNALTRIGCONVEDGE_NONE;
+  hadc1.Init.DMAContinuousRequests = DISABLE;
+  hadc1.Init.Overrun = ADC_OVR_DATA_PRESERVED;
+  hadc1.Init.SamplingTimeCommon1 = ADC_SAMPLETIME_3CYCLES_5;
+  hadc1.Init.SamplingTimeCommon2 = ADC_SAMPLETIME_3CYCLES_5;
+  hadc1.Init.OversamplingMode = DISABLE;
+  hadc1.Init.TriggerFrequencyMode = ADC_TRIGGER_FREQ_HIGH;
+  if (HAL_ADC_Init(&hadc1) != HAL_OK)
+  {
+    Error_Handler();
+  }
+
+  /** Configure Regular Channel
+  */
+  sConfig.Channel = ADC_CHANNEL_14;
+  sConfig.Rank = ADC_REGULAR_RANK_1;
+  sConfig.SamplingTime = ADC_SAMPLINGTIME_COMMON_1;
+  if (HAL_ADC_ConfigChannel(&hadc1, &sConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN ADC1_Init 2 */
+  /* USER CODE END ADC1_Init 2 */
+
+}
+
+/**
   * @brief LPTIM1 Initialization Function
   * @param None
   * @retval None
@@ -243,13 +332,11 @@ static void MX_LPTIM1_Init(void)
 {
 
   /* USER CODE BEGIN LPTIM1_Init 0 */
-
   /* USER CODE END LPTIM1_Init 0 */
 
   LPTIM_OC_ConfigTypeDef sConfig1 = {0};
 
   /* USER CODE BEGIN LPTIM1_Init 1 */
-
   /* USER CODE END LPTIM1_Init 1 */
   hlptim1.Instance = LPTIM1;
   hlptim1.Init.Clock.Source = LPTIM_CLOCKSOURCE_APBCLOCK_LPOSC;
@@ -272,7 +359,6 @@ static void MX_LPTIM1_Init(void)
     Error_Handler();
   }
   /* USER CODE BEGIN LPTIM1_Init 2 */
-
   /* USER CODE END LPTIM1_Init 2 */
   HAL_LPTIM_MspPostInit(&hlptim1);
 
@@ -287,7 +373,6 @@ static void MX_TIM1_Init(void)
 {
 
   /* USER CODE BEGIN TIM1_Init 0 */
-
   /* USER CODE END TIM1_Init 0 */
 
   TIM_MasterConfigTypeDef sMasterConfig = {0};
@@ -295,7 +380,6 @@ static void MX_TIM1_Init(void)
   TIM_BreakDeadTimeConfigTypeDef sBreakDeadTimeConfig = {0};
 
   /* USER CODE BEGIN TIM1_Init 1 */
-
   /* USER CODE END TIM1_Init 1 */
   htim1.Instance = TIM1;
   htim1.Init.Prescaler = 63;
@@ -343,7 +427,6 @@ static void MX_TIM1_Init(void)
     Error_Handler();
   }
   /* USER CODE BEGIN TIM1_Init 2 */
-
   /* USER CODE END TIM1_Init 2 */
   HAL_TIM_MspPostInit(&htim1);
 
@@ -363,8 +446,8 @@ static void MX_GPIO_Init(void)
   /* GPIO Ports Clock Enable */
   __HAL_RCC_GPIOC_CLK_ENABLE();
   __HAL_RCC_GPIOF_CLK_ENABLE();
-  __HAL_RCC_GPIOB_CLK_ENABLE();
   __HAL_RCC_GPIOA_CLK_ENABLE();
+  __HAL_RCC_GPIOB_CLK_ENABLE();
 
   /*Configure GPIO pins : I2C1_SCL_Pin I2C1_SDA_Pin */
   GPIO_InitStruct.Pin = I2C1_SCL_Pin|I2C1_SDA_Pin;
@@ -379,7 +462,6 @@ static void MX_GPIO_Init(void)
 }
 
 /* USER CODE BEGIN 4 */
-
 /* USER CODE END 4 */
 
 /**
@@ -389,11 +471,11 @@ static void MX_GPIO_Init(void)
 void Error_Handler(void)
 {
   /* USER CODE BEGIN Error_Handler_Debug */
-  /* User can add his own implementation to report the HAL error return state */
-  __disable_irq();
-  while (1)
-  {
-  }
+ /* User can add his own implementation to report the HAL error return state */
+ __disable_irq();
+ while (1)
+ {
+ }
   /* USER CODE END Error_Handler_Debug */
 }
 
@@ -408,8 +490,8 @@ void Error_Handler(void)
 void assert_failed(uint8_t *file, uint32_t line)
 {
   /* USER CODE BEGIN 6 */
-  /* User can add his own implementation to report the file name and line number,
-     ex: printf("Wrong parameters value: file %s on line %d\r\n", file, line) */
+ /* User can add his own implementation to report the file name and line number,
+    ex: printf("Wrong parameters value: file %s on line %d\r\n", file, line) */
   /* USER CODE END 6 */
 }
 #endif /* USE_FULL_ASSERT */
