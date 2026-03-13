@@ -21,8 +21,8 @@
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
-#include "stdio.h"
-#include "string.h"
+uint32_t adc_val = 0;      // Valeur brute (0 à 4095)
+float tension = 0.0;       // Valeur convertie en Volts
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -45,20 +45,14 @@
 COM_InitTypeDef BspCOMInit;
 ADC_HandleTypeDef hadc1;
 
-UART_HandleTypeDef hlpuart1;
-
 /* USER CODE BEGIN PV */
-uint32_t adc_value = 0;
-float voltage = 0;
-float lux = 0;
-char msg[50];
+
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
 void SystemClock_Config(void);
 static void MX_GPIO_Init(void);
 static void MX_ADC1_Init(void);
-static void MX_LPUART1_UART_Init(void);
 /* USER CODE BEGIN PFP */
 
 /* USER CODE END PFP */
@@ -98,12 +92,11 @@ int main(void)
   /* Initialize all configured peripherals */
   MX_GPIO_Init();
   MX_ADC1_Init();
-  MX_LPUART1_UART_Init();
   /* USER CODE BEGIN 2 */
 
   /* USER CODE END 2 */
 
-  /* Initialize leds  c*jhnui/
+  /* Initialize leds */
   BSP_LED_Init(LED_GREEN);
 
   /* Initialize USER push-button, will be used to trigger an interrupt each time it's pressed.*/
@@ -124,43 +117,42 @@ int main(void)
   /* USER CODE BEGIN WHILE */
   while (1)
   {
-      // 1. Démarrer la conversion ADC
-	  HAL_ADC_Start(&hadc1);
-	      if (HAL_ADC_PollForConversion(&hadc1, 10) == HAL_OK)
-	      {
-	          adc_value = HAL_ADC_GetValue(&hadc1);
-	      }
-	 HAL_ADC_Stop(&hadc1);
+      // 1. Lancement de la conversion sur PA4 (ADC1_IN8)
+      HAL_ADC_Start(&hadc1);
 
-      // 2. Conversion en tension (Sur 12 bits : 4095)
-      voltage = (adc_value * 3.3f) / 4095.0f;
+      // 2. Attente de la fin de conversion (timeout de 10ms)
+      if (HAL_ADC_PollForConversion(&hadc1, 10) == HAL_OK)
+      {
+          // 3. Lecture de la valeur numérique
+          adc_val = HAL_ADC_GetValue(&hadc1);
 
-      // 3. Calcul approximatif des Lux
-      // Note : La formule dépend de votre résistance (ex: 10k) et des specs de la LDR
-      lux = (100.0f * voltage); // Conversion simplifiée pour l'exemple
-
-      // 4. Affichage sur le port série (UART2)
-      	 // On sépare la partie entière et la partie décimale (2 chiffres après la virgule)
-      	  int entier = (int)lux;
-      	  int decimal = (int)((lux - entier) * 100);
-      	 //Affichage Liaison série
-      	  sprintf(msg, "Luminosite: %d.%02d Lux (ADC: %lu)\r\n", entier, decimal, adc_value);
-      	  HAL_UART_Transmit(&hlpuart1, (uint8_t*)msg, strlen(msg), HAL_MAX_DELAY);
-
-      // 5. Logique de la LED (Seuil : 50 Lux)
-      if (lux < 80.0f) {
-          HAL_GPIO_WritePin(GPIOA, GPIO_PIN_5, GPIO_PIN_SET);   // Allumer
-      } else {
-          HAL_GPIO_WritePin(GPIOA, GPIO_PIN_5, GPIO_PIN_RESET); // Éteindre
+          // 4. Conversion optionnelle en tension (V)
+          // Formule : (Valeur_Lue * Vref) / (2^Resolution - 1)
+          tension = (adc_val * 3.3f) / 4095.0f;
       }
 
-      HAL_Delay(500); // Pause de 500ms
-  }
+      // 5. Arrêt de l'ADC pour économiser l'énergie
+      HAL_ADC_Stop(&hadc1);
+
+      // --- LOGIQUE DE SORTIE SUR PA5 (LDR_Info) ---
+      // Exemple : Allumer PA5 si la tension descend sous 1.5V (obscurité)
+      if (tension < 1.5f)
+      {
+          HAL_GPIO_WritePin(GPIOA, GPIO_PIN_5, GPIO_PIN_SET);
+      }
+      else
+      {
+          HAL_GPIO_WritePin(GPIOA, GPIO_PIN_5, GPIO_PIN_RESET);
+      }
+
+      // Petite pause de 100ms pour ne pas surcharger le CPU
+      HAL_Delay(100);
+
 
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
-
+  }
   /* USER CODE END 3 */
 }
 
@@ -259,53 +251,6 @@ static void MX_ADC1_Init(void)
   /* USER CODE BEGIN ADC1_Init 2 */
 
   /* USER CODE END ADC1_Init 2 */
-
-}
-
-/**
-  * @brief LPUART1 Initialization Function
-  * @param None
-  * @retval None
-  */
-static void MX_LPUART1_UART_Init(void)
-{
-
-  /* USER CODE BEGIN LPUART1_Init 0 */
-
-  /* USER CODE END LPUART1_Init 0 */
-
-  /* USER CODE BEGIN LPUART1_Init 1 */
-
-  /* USER CODE END LPUART1_Init 1 */
-  hlpuart1.Instance = LPUART1;
-  hlpuart1.Init.BaudRate = 209700;
-  hlpuart1.Init.WordLength = UART_WORDLENGTH_8B;
-  hlpuart1.Init.StopBits = UART_STOPBITS_1;
-  hlpuart1.Init.Parity = UART_PARITY_NONE;
-  hlpuart1.Init.Mode = UART_MODE_TX_RX;
-  hlpuart1.Init.HwFlowCtl = UART_HWCONTROL_NONE;
-  hlpuart1.Init.OneBitSampling = UART_ONE_BIT_SAMPLE_DISABLE;
-  hlpuart1.AdvancedInit.AdvFeatureInit = UART_ADVFEATURE_NO_INIT;
-  hlpuart1.FifoMode = UART_FIFOMODE_DISABLE;
-  if (HAL_UART_Init(&hlpuart1) != HAL_OK)
-  {
-    Error_Handler();
-  }
-  if (HAL_UARTEx_SetTxFifoThreshold(&hlpuart1, UART_TXFIFO_THRESHOLD_1_8) != HAL_OK)
-  {
-    Error_Handler();
-  }
-  if (HAL_UARTEx_SetRxFifoThreshold(&hlpuart1, UART_RXFIFO_THRESHOLD_1_8) != HAL_OK)
-  {
-    Error_Handler();
-  }
-  if (HAL_UARTEx_DisableFifoMode(&hlpuart1) != HAL_OK)
-  {
-    Error_Handler();
-  }
-  /* USER CODE BEGIN LPUART1_Init 2 */
-
-  /* USER CODE END LPUART1_Init 2 */
 
 }
 
