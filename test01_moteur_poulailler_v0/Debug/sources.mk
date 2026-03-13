@@ -25,6 +25,5 @@ SUBDIRS := \
 Core/Src \
 Core/Startup \
 Drivers/BSP/STM32U0xx_Nucleo \
-Drivers/CMSIS/Device/ST/STM32U0xx/Source/Templates \
 Drivers/STM32U0xx_HAL_Driver/Src \
 

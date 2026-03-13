@@ -1,5 +1,4 @@
-Drivers/CMSIS/Device/ST/STM32U0xx/Source/Templates/system_stm32u0xx.o: \
- ../Drivers/CMSIS/Device/ST/STM32U0xx/Source/Templates/system_stm32u0xx.c \
+Core/Src/system_stm32u0xx.o: ../Core/Src/system_stm32u0xx.c \
  ../Drivers/CMSIS/Device/ST/STM32U0xx/Include/stm32u0xx.h \
  ../Drivers/CMSIS/Device/ST/STM32U0xx/Include/stm32u031xx.h \
  ../Drivers/CMSIS/Include/core_cm0plus.h \

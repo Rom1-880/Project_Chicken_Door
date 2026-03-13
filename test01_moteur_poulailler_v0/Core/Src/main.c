@@ -21,6 +21,8 @@
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
+#include <string.h>
+#include <stdio.h>
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -105,18 +107,27 @@ void Motor_SetSpeed(uint16_t speed)
    __HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_4, current_speed);
    __HAL_LPTIM_COMPARE_SET(&hlptim1, LPTIM_CHANNEL_1, current_speed);
 }
+
+//a
 // Lecture courant moteur
 float Get_Motor_Current(void)
 {
    extern ADC_HandleTypeDef hadc1;
-   uint32_t raw_value = 0;
-   float res_ohm = 2.0f; // Ta résistance réelle de 2 Ohms
+   float res_ohm = 4.5f;
+   float offset = 0.00f;
+
    HAL_ADC_Start(&hadc1);
    if (HAL_ADC_PollForConversion(&hadc1, 10) == HAL_OK) {
        adc_value = HAL_ADC_GetValue(&hadc1);
-       // Formule : Courant = Tension / Résistance
-       // Tension = (Valeur_ADC / 4095) * 3.3V
-       motor_current = ((adc_value * 3.3f) / 4095.0f) / res_ohm;
+
+       // Calcul du courant
+       motor_current = ((float)adc_value * 3.3f / 4095.0f) / res_ohm;
+
+       // On soustrait l'erreur de mesure
+       motor_current -= offset;
+
+       // On évite d'afficher des valeurs négatives
+       if (motor_current < 0) motor_current = 0;
    }
    HAL_ADC_Stop(&hadc1);
    return motor_current;
@@ -202,7 +213,7 @@ int main(void)
 	    }
 	      // Mesure du courant et sécurité blocage
 	      uint32_t current_time = HAL_GetTick();
-	            if (current_time - last_tick >= 500)
+	            if (current_time - last_tick >= 100)
 	            {
 	                last_tick = current_time;
 	                float current = Get_Motor_Current();
@@ -300,8 +311,8 @@ static void MX_ADC1_Init(void)
   hadc1.Init.ExternalTrigConvEdge = ADC_EXTERNALTRIGCONVEDGE_NONE;
   hadc1.Init.DMAContinuousRequests = DISABLE;
   hadc1.Init.Overrun = ADC_OVR_DATA_PRESERVED;
-  hadc1.Init.SamplingTimeCommon1 = ADC_SAMPLETIME_3CYCLES_5;
-  hadc1.Init.SamplingTimeCommon2 = ADC_SAMPLETIME_3CYCLES_5;
+  hadc1.Init.SamplingTimeCommon1 = ADC_SAMPLETIME_160CYCLES_5;
+  hadc1.Init.SamplingTimeCommon2 = ADC_SAMPLETIME_160CYCLES_5;
   hadc1.Init.OversamplingMode = DISABLE;
   hadc1.Init.TriggerFrequencyMode = ADC_TRIGGER_FREQ_HIGH;
   if (HAL_ADC_Init(&hadc1) != HAL_OK)
@@ -340,7 +351,7 @@ static void MX_LPTIM1_Init(void)
   /* USER CODE END LPTIM1_Init 1 */
   hlptim1.Instance = LPTIM1;
   hlptim1.Init.Clock.Source = LPTIM_CLOCKSOURCE_APBCLOCK_LPOSC;
-  hlptim1.Init.Clock.Prescaler = LPTIM_PRESCALER_DIV1;
+  hlptim1.Init.Clock.Prescaler = LPTIM_PRESCALER_DIV64;
   hlptim1.Init.Trigger.Source = LPTIM_TRIGSOURCE_SOFTWARE;
   hlptim1.Init.Period = 999;
   hlptim1.Init.UpdateMode = LPTIM_UPDATE_IMMEDIATE;
@@ -353,7 +364,7 @@ static void MX_LPTIM1_Init(void)
     Error_Handler();
   }
   sConfig1.Pulse = 0;
-  sConfig1.OCPolarity = LPTIM_OCPOLARITY_HIGH;
+  sConfig1.OCPolarity = LPTIM_OCPOLARITY_LOW;
   if (HAL_LPTIM_OC_ConfigChannel(&hlptim1, &sConfig1, LPTIM_CHANNEL_1) != HAL_OK)
   {
     Error_Handler();
