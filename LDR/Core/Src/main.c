@@ -103,7 +103,7 @@ int main(void)
 
   /* USER CODE END 2 */
 
-  /* Initialize leds  c*jhnui/
+  /* Initialize leds  */
   BSP_LED_Init(LED_GREEN);
 
   /* Initialize USER push-button, will be used to trigger an interrupt each time it's pressed.*/
