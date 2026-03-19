@@ -42,9 +42,8 @@
 
 /* Private variables ---------------------------------------------------------*/
 
+COM_InitTypeDef BspCOMInit;
 ADC_HandleTypeDef hadc1;
-
-UART_HandleTypeDef huart2;
 
 /* USER CODE BEGIN PV */
 uint32_t adc_value = 0;
@@ -53,7 +52,7 @@ float R_ldr = 0;
 float lux = 0;
 char msg[100];
 
-// Paramètres de ton montage
+// Paramètres de calibration
 const float R_FIXED = 100000.0; // Ta résistance de 100k
 const float VCC = 3.3;
 /* USER CODE END PV */
@@ -62,7 +61,6 @@ const float VCC = 3.3;
 void SystemClock_Config(void);
 static void MX_GPIO_Init(void);
 static void MX_ADC1_Init(void);
-static void MX_USART2_UART_Init(void);
 /* USER CODE BEGIN PFP */
 
 /* USER CODE END PFP */
@@ -102,7 +100,6 @@ int main(void)
   /* Initialize all configured peripherals */
   MX_GPIO_Init();
   MX_ADC1_Init();
-  MX_USART2_UART_Init();
   /* USER CODE BEGIN 2 */
 
   /* USER CODE END 2 */
@@ -110,47 +107,57 @@ int main(void)
   /* Initialize USER push-button, will be used to trigger an interrupt each time it's pressed.*/
   BSP_PB_Init(BUTTON_USER, BUTTON_MODE_EXTI);
 
+  /* Initialize COM1 port (115200, 8 bits (7-bit data + 1 stop bit), no parity */
+  BspCOMInit.BaudRate   = 115200;
+  BspCOMInit.WordLength = COM_WORDLENGTH_8B;
+  BspCOMInit.StopBits   = COM_STOPBITS_1;
+  BspCOMInit.Parity     = COM_PARITY_NONE;
+  BspCOMInit.HwFlowCtl  = COM_HWCONTROL_NONE;
+  if (BSP_COM_Init(COM1, &BspCOMInit) != BSP_ERROR_NONE)
+  {
+    Error_Handler();
+  }
+
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
   while (1)
-    {
-      // 1. Lecture de la tension sur PA5 (LDR_INFO)
-      HAL_ADC_Start(&hadc1);
-      if (HAL_ADC_PollForConversion(&hadc1, 10) == HAL_OK) {
-          adc_value = HAL_ADC_GetValue(&hadc1);
-      }
-      HAL_ADC_Stop(&hadc1);
+  {
+      // 1. Démarrer la conversion ADC
+	  HAL_ADC_Start(&hadc1);
+	      if (HAL_ADC_PollForConversion(&hadc1, 10) == HAL_OK)
+	      {
+	          adc_value = HAL_ADC_GetValue(&hadc1);
+	      }
+	 HAL_ADC_Stop(&hadc1);
 
-      // 2. Conversion : Chiffre ADC -> Tension (Volt)
-      voltage = (float)adc_value * VCC / 4095.0;
+      // 2. Conversion en tension (Sur 12 bits : 4095)
+      voltage = (float)adc_value * VCC / 4095.0f;
 
-      // 3. Calcul de la résistance de la LDR puis des Lux
-      // On vérifie que voltage > 0 pour éviter de diviser par zéro
-      if (voltage > 0.1) {
-          // Formule du pont diviseur inversée pour trouver R_ldr
-          R_ldr = (VCC * R_FIXED / voltage) - R_FIXED;
+      //Conversion en LUX
+              // Formule simplifiée typique : Lux = (500 / R_ldr en kOhm)
+              // Pour plus de précision, on utilise souvent : Lux = pow(10, (log10(R_ldr) - b) / m)
+              lux = 500.0 / (R_ldr / 1000.0);
+      // 3. Calcul approximatif des Lux
+      // Note : La formule dépend de votre résistance (ex: 10k) et des specs de la LDR
+      lux = (100.0f * voltage); // Conversion simplifiée pour l'exemple
 
-          // Formule d'approximation Lux (standard pour une LDR de 10k-100k)
-          // Lux = 500 / (R_ldr en kOhm)
-          lux = 500.0 / (R_ldr / 1000.0);
+      // 4. Affichage sur le port série (UART2)
+      	 // On sépare la partie entière et la partie décimale (2 chiffres après la virgule)
+      	  int entier = (int)lux;
+      	  int decimal = (int)((lux - entier) * 100);
+      	 //Affichage Liaison série
+      	  sprintf(msg, "Luminosite: %d.%02d Lux (ADC: %lu)\r\n", entier, decimal, adc_value);
+      	  HAL_UART_Transmit(&hlpuart1, (uint8_t*)msg, strlen(msg), HAL_MAX_DELAY);
+
+      // 5. Logique de la LED (Seuil : 50 Lux)
+      if (lux < 50.0f) {
+          HAL_GPIO_WritePin(GPIOA, GPIO_PIN_4, GPIO_PIN_SET);   // Allumer
       } else {
-          lux = 0.0;
+          HAL_GPIO_WritePin(GPIOA, GPIO_PIN_4, GPIO_PIN_RESET); // Éteindre
       }
 
-      // 4. Affichage sur le PC (VCP / USART2)
-      // On affiche l'entier (int)lux pour être sûr que ça s'affiche sans config spéciale
-      int len = sprintf(msg, "ADC: %lu | Lux estimat: %d\r\n", adc_value, (int)lux);
-      HAL_UART_Transmit(&huart2, (uint8_t*)msg, len, HAL_MAX_DELAY);
-
-      // 5. COMMANDE DE LA LED (Seuil : 50 Lux)
-      if (lux < 50.0) {
-          HAL_GPIO_WritePin(GPIOA, GPIO_PIN_4, GPIO_PIN_SET);   // Allume (Nuit)
-      } else {
-          HAL_GPIO_WritePin(GPIOA, GPIO_PIN_4, GPIO_PIN_RESET); // Éteint (Jour)
-      }
-
-      HAL_Delay(500); // On attend 0.5 seconde entre chaque mesure
-    }
+      HAL_Delay(500); // Pause de 500ms
+  }
 
     /* USER CODE END WHILE */
 
@@ -244,7 +251,7 @@ static void MX_ADC1_Init(void)
 
   /** Configure Regular Channel
   */
-  sConfig.Channel = ADC_CHANNEL_8;
+  sConfig.Channel = ADC_CHANNEL_9;
   sConfig.Rank = ADC_REGULAR_RANK_1;
   sConfig.SamplingTime = ADC_SAMPLINGTIME_COMMON_1;
   if (HAL_ADC_ConfigChannel(&hadc1, &sConfig) != HAL_OK)
@@ -254,54 +261,6 @@ static void MX_ADC1_Init(void)
   /* USER CODE BEGIN ADC1_Init 2 */
 
   /* USER CODE END ADC1_Init 2 */
-
-}
-
-/**
-  * @brief USART2 Initialization Function
-  * @param None
-  * @retval None
-  */
-static void MX_USART2_UART_Init(void)
-{
-
-  /* USER CODE BEGIN USART2_Init 0 */
-
-  /* USER CODE END USART2_Init 0 */
-
-  /* USER CODE BEGIN USART2_Init 1 */
-
-  /* USER CODE END USART2_Init 1 */
-  huart2.Instance = USART2;
-  huart2.Init.BaudRate = 115200;
-  huart2.Init.WordLength = UART_WORDLENGTH_8B;
-  huart2.Init.StopBits = UART_STOPBITS_1;
-  huart2.Init.Parity = UART_PARITY_NONE;
-  huart2.Init.Mode = UART_MODE_TX_RX;
-  huart2.Init.HwFlowCtl = UART_HWCONTROL_NONE;
-  huart2.Init.OverSampling = UART_OVERSAMPLING_16;
-  huart2.Init.OneBitSampling = UART_ONE_BIT_SAMPLE_DISABLE;
-  huart2.Init.ClockPrescaler = UART_PRESCALER_DIV1;
-  huart2.AdvancedInit.AdvFeatureInit = UART_ADVFEATURE_NO_INIT;
-  if (HAL_UART_Init(&huart2) != HAL_OK)
-  {
-    Error_Handler();
-  }
-  if (HAL_UARTEx_SetTxFifoThreshold(&huart2, UART_TXFIFO_THRESHOLD_1_8) != HAL_OK)
-  {
-    Error_Handler();
-  }
-  if (HAL_UARTEx_SetRxFifoThreshold(&huart2, UART_RXFIFO_THRESHOLD_1_8) != HAL_OK)
-  {
-    Error_Handler();
-  }
-  if (HAL_UARTEx_DisableFifoMode(&huart2) != HAL_OK)
-  {
-    Error_Handler();
-  }
-  /* USER CODE BEGIN USART2_Init 2 */
-
-  /* USER CODE END USART2_Init 2 */
 
 }
 
@@ -323,10 +282,10 @@ static void MX_GPIO_Init(void)
   __HAL_RCC_GPIOB_CLK_ENABLE();
 
   /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(GPIOA, GPIO_PIN_5, GPIO_PIN_RESET);
+  HAL_GPIO_WritePin(GPIOA, GPIO_PIN_4, GPIO_PIN_RESET);
 
-  /*Configure GPIO pin : PA5 */
-  GPIO_InitStruct.Pin = GPIO_PIN_5;
+  /*Configure GPIO pin : PA4 */
+  GPIO_InitStruct.Pin = GPIO_PIN_4;
   GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
@@ -360,9 +319,8 @@ void Error_Handler(void)
   while (1)
   {
   }
-}
   /* USER CODE END Error_Handler_Debug */
-
+}
 
 #ifdef  USE_FULL_ASSERT
 /**
