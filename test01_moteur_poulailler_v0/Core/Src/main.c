@@ -120,6 +120,7 @@ void Motor_Stop(void)
    HAL_GPIO_WritePin(GPIOA, GPIO_PIN_11, GPIO_PIN_RESET);
    HAL_GPIO_WritePin(GPIOB, GPIO_PIN_2, GPIO_PIN_RESET);
 }
+
 void Motor_SetSpeed(uint16_t speed)
 {
    if (speed > 999) speed = 999;
