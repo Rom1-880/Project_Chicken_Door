@@ -78,40 +78,45 @@ static void MX_ADC1_Init(void);
 /* USER CODE BEGIN 0 */
 void Motor_Forward(void)
 {
-   // 1. ARRÊT TOTAL
+// ARRÊT des PWM
    HAL_LPTIM_PWM_Stop(&hlptim1, LPTIM_CHANNEL_1);
    HAL_TIM_PWM_Stop(&htim1, TIM_CHANNEL_4);
 
+// PINS A ZERO
    HAL_GPIO_WritePin(GPIOB, GPIO_PIN_2, GPIO_PIN_RESET);
    HAL_GPIO_WritePin(GPIOA, GPIO_PIN_11, GPIO_PIN_RESET);
 
    HAL_Delay(5);
 
-   // 2.
+// Lancement de TIM1 + set de la vitesse
    __HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_4, current_speed);
    HAL_TIM_PWM_Start(&htim1, TIM_CHANNEL_4);
 }
 void Motor_Reverse(void)
 {
-   // 1. ARRÊT TOTAL
+// ARRÊT des PWM
    HAL_TIM_PWM_Stop(&htim1, TIM_CHANNEL_4);
    HAL_LPTIM_PWM_Stop(&hlptim1, LPTIM_CHANNEL_1);
 
-   // 2. FORCE LES PINS A ZERO
+// PINS A ZERO
    HAL_GPIO_WritePin(GPIOA, GPIO_PIN_11, GPIO_PIN_RESET);
    HAL_GPIO_WritePin(GPIOB, GPIO_PIN_2, GPIO_PIN_RESET);
 
    HAL_Delay(5);
 
-   //
+// Lancement de LPTIM1 + set de la vitesse
    HAL_LPTIM_PWM_Start(&hlptim1, LPTIM_CHANNEL_1);
    __HAL_LPTIM_COMPARE_SET(&hlptim1, LPTIM_CHANNEL_1, current_speed);
 
 }
 void Motor_Stop(void)
 {
+
+// ARRÊT des PWM
    HAL_TIM_PWM_Stop(&htim1, TIM_CHANNEL_4);
    HAL_LPTIM_PWM_Stop(&hlptim1, LPTIM_CHANNEL_1);
+
+// PINS A ZERO
    HAL_GPIO_WritePin(GPIOA, GPIO_PIN_11, GPIO_PIN_RESET);
    HAL_GPIO_WritePin(GPIOB, GPIO_PIN_2, GPIO_PIN_RESET);
 }
