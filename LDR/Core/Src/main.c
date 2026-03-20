@@ -53,7 +53,7 @@ float R_ldr = 0;
 float lux = 0;
 char msg[100];
 
-// Paramètres de ton montage
+// Paramètres du montage
 const float R_FIXED = 100000.0; // Ta résistance de 100k
 const float VCC = 3.3;
 /* USER CODE END PV */
@@ -124,6 +124,10 @@ int main(void)
       // 2. Conversion : Chiffre ADC -> Tension (Volt)
       voltage = (float)adc_value * VCC / 4095.0;
 
+      // Calcul de la partie entière et des deux premières décimales
+      int volt_entier = (int)voltage;
+      int volt_decimale = (int)((voltage - volt_entier) * 100);
+
       // 3. Calcul de la résistance de la LDR puis des Lux
       // On vérifie que voltage > 0 pour éviter de diviser par zéro
       if (voltage > 0.1) {
@@ -132,14 +136,15 @@ int main(void)
 
           // Formule d'approximation Lux (standard pour une LDR de 10k-100k)
           // Lux = 500 / (R_ldr en kOhm)
-          lux = 500.0 / (R_ldr / 1000.0);
+          //lux = 500.0 / (R_ldr / 1000.0);
+          lux = 10^((log(R_ldr)-3)/-0,91);
       } else {
           lux = 0.0;
       }
 
       // 4. Affichage sur le PC (VCP / USART2)
       // On affiche l'entier (int)lux pour être sûr que ça s'affiche sans config spéciale
-      int len = sprintf(msg, "ADC: %lu | Lux estimat: %d\r\n", adc_value, (int)lux);
+      int len = sprintf(msg, "ADC: %lu |Tension : %d.%02dV | Lux estimat: %d\r\n", adc_value, volt_entier, volt_decimale, (int)lux);
       HAL_UART_Transmit(&huart2, (uint8_t*)msg, len, HAL_MAX_DELAY);
 
       // 5. COMMANDE DE LA LED (Seuil : 50 Lux)
