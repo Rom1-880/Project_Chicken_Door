@@ -21,8 +21,6 @@
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
-#include <string.h>
-#include <stdio.h>
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -51,11 +49,19 @@ uint16_t current_speed = 900; // On fixe une vitesse par défaut pour les tests
 uint8_t rx_data;              // Variable pour stocker le caractère reçu
 extern UART_HandleTypeDef hcom_uart[];
 char msg[50]; // Buffer pour construire les messages texte
+
+
 // lecture courant moteur
 uint32_t adc_value = 0;
 float motor_current = 0.0;
 const float CURRENT_THRESHOLD = 0.8; // Seuil de blocage à 800mA (à ajuster)
 uint32_t last_tick = 0; // Pour l'envoi périodique
+
+
+// moyenne courant moteur
+float readings[5] = {0.0f, 0.0f, 0.0f, 0.0f, 0.0f};
+float current_sum = 0.0f;
+float average_current = 0.0f;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -72,22 +78,35 @@ static void MX_ADC1_Init(void);
 /* USER CODE BEGIN 0 */
 void Motor_Forward(void)
 {
-   // 1. On s'assure que le LPTIM ne génère plus de signal sur PB2
+   // 1. ARRÊT TOTAL
    HAL_LPTIM_PWM_Stop(&hlptim1, LPTIM_CHANNEL_1);
-   // On force PB2 à 0 (GND) via le GPIO
+   HAL_TIM_PWM_Stop(&htim1, TIM_CHANNEL_4);
+
    HAL_GPIO_WritePin(GPIOB, GPIO_PIN_2, GPIO_PIN_RESET);
-   // 2. On envoie le PWM sur PA11
+   HAL_GPIO_WritePin(GPIOA, GPIO_PIN_11, GPIO_PIN_RESET);
+
+   HAL_Delay(5);
+
+   // 2.
    __HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_4, current_speed);
    HAL_TIM_PWM_Start(&htim1, TIM_CHANNEL_4);
 }
 void Motor_Reverse(void)
 {
-   // 1. On arrête le PWM sur PA11 et on force à 0
+   // 1. ARRÊT TOTAL
    HAL_TIM_PWM_Stop(&htim1, TIM_CHANNEL_4);
+   HAL_LPTIM_PWM_Stop(&hlptim1, LPTIM_CHANNEL_1);
+
+   // 2. FORCE LES PINS A ZERO
    HAL_GPIO_WritePin(GPIOA, GPIO_PIN_11, GPIO_PIN_RESET);
-   // 2. On lance le PWM sur PB2 via le LPTIM
-   __HAL_LPTIM_COMPARE_SET(&hlptim1, LPTIM_CHANNEL_1, current_speed);
+   HAL_GPIO_WritePin(GPIOB, GPIO_PIN_2, GPIO_PIN_RESET);
+
+   HAL_Delay(5);
+
+   //
    HAL_LPTIM_PWM_Start(&hlptim1, LPTIM_CHANNEL_1);
+   __HAL_LPTIM_COMPARE_SET(&hlptim1, LPTIM_CHANNEL_1, current_speed);
+
 }
 void Motor_Stop(void)
 {
@@ -101,36 +120,55 @@ void Motor_SetSpeed(uint16_t speed)
    if (speed > 999) speed = 999;
    if (speed > 0 && speed < 700) speed = 700;
    current_speed = speed;
+
+
    uint8_t rx_data = 0;
    extern UART_HandleTypeDef hcom_uart[];
+
    // Mise à jour immédiate des registres pour les deux timers
    __HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_4, current_speed);
    __HAL_LPTIM_COMPARE_SET(&hlptim1, LPTIM_CHANNEL_1, current_speed);
 }
-
-//a
 // Lecture courant moteur
 float Get_Motor_Current(void)
 {
    extern ADC_HandleTypeDef hadc1;
+   uint32_t raw_value = 0;
    float res_ohm = 4.5f;
    float offset = 0.00f;
-
    HAL_ADC_Start(&hadc1);
    if (HAL_ADC_PollForConversion(&hadc1, 10) == HAL_OK) {
        adc_value = HAL_ADC_GetValue(&hadc1);
+       // Formule : Courant = Tension / Résistance
+       // Tension = (Valeur_ADC / 4095) * 3.3V
+       motor_current = (((adc_value * 3.3f) / 4095.0f) / res_ohm);
 
-       // Calcul du courant
-       motor_current = ((float)adc_value * 3.3f / 4095.0f) / res_ohm;
-
-       // On soustrait l'erreur de mesure
        motor_current -= offset;
 
-       // On évite d'afficher des valeurs négatives
-       if (motor_current < 0) motor_current = 0;
+        // On évite d'afficher des valeurs négatives
+        if (motor_current < 0) motor_current = 0;
    }
    HAL_ADC_Stop(&hadc1);
    return motor_current;
+}
+
+float Update_Moving_Average(float new_sample)
+{
+    // 1. Décalage des valeurs (Shift)
+    readings[0] = readings[1];
+    readings[1] = readings[2];
+    readings[2] = readings[3];
+    readings[3] = readings[4];
+    readings[4] = new_sample;
+
+    // 2. Calcul de la somme
+    current_sum = 0;
+    for(int i = 0; i < 5; i++) {
+        current_sum += readings[i];
+    }
+
+    // 3. Retourne la moyenne
+    return current_sum / 5.0f;
 }
 /* USER CODE END 0 */
 
@@ -213,24 +251,27 @@ int main(void)
 	    }
 	      // Mesure du courant et sécurité blocage
 	      uint32_t current_time = HAL_GetTick();
-	            if (current_time - last_tick >= 100)
-	            {
-	                last_tick = current_time;
-	                float current = Get_Motor_Current();
-	                // SÉCURITÉ : On ne vérifie le blocage QUE SI le moteur est censé tourner
-	                // (On vérifie si la vitesse est > 0 et si on n'est pas à l'arrêt)
-	                if (current_speed > 0 && current > CURRENT_THRESHOLD)
-	                {
-	                   // Motor_Stop();
-	                   // current_speed = 0; // On remet la vitesse à 0 pour arrêter l'alerte
-	                    // Message d'alerte avec la valeur du courant fautif
-	                    int len_err = sprintf(msg, "\r\n!! STOP : BLOCAGE DETECTE (%.2f A) !!\r\n", current);
-	                    HAL_UART_Transmit(&hcom_uart[COM1], (uint8_t*)msg, len_err, 100);
-	                }
-	                // Affichage normal de monitoring
-	                int len = sprintf(msg, "I: %.2f A | Spd: %d | ADC: %lu\r\n", current, current_speed, adc_value);
-	                HAL_UART_Transmit(&hcom_uart[COM1], (uint8_t*)msg, len, 50);
-	            }
+	      if (current_time - last_tick >= 100)
+	      {
+	          last_tick = current_time;
+
+	          // 1. On récupère la mesure "instantanée"
+	          float instant_current = Get_Motor_Current();
+
+	          // 2. On l'ajoute à notre moyenne glissante de 5 valeurs
+	          average_current = Update_Moving_Average(instant_current);
+
+	          // 3. On utilise 'average_current' pour la sécurité et l'affichage
+	          if (current_speed > 0 && average_current > CURRENT_THRESHOLD)
+	          {
+	              // Alerte blocage...
+	          }
+
+	          // Affichage stable
+	          int len = sprintf(msg, "I_Avg: %.2f A | ADC : %lu\r\n", average_current, adc_value);
+	          HAL_UART_Transmit(&hcom_uart[COM1], (uint8_t*)msg, len, 50);
+	      }
+
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
