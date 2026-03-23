@@ -23,6 +23,7 @@
 /* USER CODE BEGIN Includes */
 #include "stdio.h"
 #include "string.h"
+#include "math.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -44,18 +45,21 @@
 
 ADC_HandleTypeDef hadc1;
 
+DAC_HandleTypeDef hdac1;
+
 UART_HandleTypeDef huart2;
 
 /* USER CODE BEGIN PV */
 uint32_t adc_value = 0;
-float voltage = 0;
-float R_ldr = 0;
-float lux = 0;
+float voltage = 0.0f;
+float R_ldr = 0.0f;
+float lux = 0.0f;
 char msg[100];
 
 // Paramètres du montage
-const float R_FIXED = 100000.0; // Ta résistance de 100k
-const float VCC = 3.3;
+const float R_FIXED = 100000.0f; // résistance de 100k
+const float VCC = 3.3f;
+
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -63,6 +67,7 @@ void SystemClock_Config(void);
 static void MX_GPIO_Init(void);
 static void MX_ADC1_Init(void);
 static void MX_USART2_UART_Init(void);
+static void MX_DAC1_Init(void);
 /* USER CODE BEGIN PFP */
 
 /* USER CODE END PFP */
@@ -103,8 +108,11 @@ int main(void)
   MX_GPIO_Init();
   MX_ADC1_Init();
   MX_USART2_UART_Init();
+  MX_DAC1_Init();
   /* USER CODE BEGIN 2 */
-
+  HAL_ADCEx_Calibration_Start(&hadc1);
+  HAL_GPIO_WritePin(GPIOA, GPIO_PIN_4, GPIO_PIN_SET); // Alimente le pont diviseur
+  HAL_Delay(10);
   /* USER CODE END 2 */
 
   /* Initialize USER push-button, will be used to trigger an interrupt each time it's pressed.*/
@@ -116,7 +124,8 @@ int main(void)
     {
       // 1. Lecture de la tension sur PA5 (LDR_INFO)
       HAL_ADC_Start(&hadc1);
-      if (HAL_ADC_PollForConversion(&hadc1, 10) == HAL_OK) {
+      if (HAL_ADC_PollForConversion(&hadc1, 10) == HAL_OK)
+      {
           adc_value = HAL_ADC_GetValue(&hadc1);
       }
       HAL_ADC_Stop(&hadc1);
@@ -125,34 +134,41 @@ int main(void)
       voltage = (float)adc_value * VCC / 4095.0;
 
       // Calcul de la partie entière et des deux premières décimales
-      int volt_entier = (int)voltage;
-      int volt_decimale = (int)((voltage - volt_entier) * 100);
+      //int volt_entier = (int)voltage;
+      //int volt_decimale = (int)((voltage - volt_entier) * 100);
 
       // 3. Calcul de la résistance de la LDR puis des Lux
       // On vérifie que voltage > 0 pour éviter de diviser par zéro
-      if (voltage > 0.1) {
+      if (voltage > 0.1f) {
           // Formule du pont diviseur inversée pour trouver R_ldr
           R_ldr = (VCC * R_FIXED / voltage) - R_FIXED;
 
           // Formule d'approximation Lux (standard pour une LDR de 10k-100k)
           // Lux = 500 / (R_ldr en kOhm)
           //lux = 500.0 / (R_ldr / 1000.0);
-          lux = 10^((log(R_ldr)-3)/-0,91);
+          lux = pow(10,((log(R_ldr/1000.0f)-3)/-0.91));
       } else {
           lux = 0.0;
       }
+      // 4. Décomposition pour affichage sans %f
+          int volt_entier = (int)voltage;
+          int volt_dec    = (int)((voltage - volt_entier) * 100);
+          int rldr_kohm   = (int)(R_ldr / 1000.0f);
+          int lux_entier  = (int)lux;
+          int lux_dec     = (int)((lux - lux_entier) * 10);
 
-      // 4. Affichage sur le PC (VCP / USART2)
+          // 5. Affichage sur le PC (VCP / USART2)
       // On affiche l'entier (int)lux pour être sûr que ça s'affiche sans config spéciale
-      int len = sprintf(msg, "ADC: %lu |Tension : %d.%02dV | Lux estimat: %d\r\n", adc_value, volt_entier, volt_decimale, (int)lux);
-      HAL_UART_Transmit(&huart2, (uint8_t*)msg, len, HAL_MAX_DELAY);
+      //int len = sprintf(msg, "ADC: %lu |Tension : %d.%02dV | Lux estimat: %d\r\n", adc_value, voltage, (int)lux);
+         int len = sprintf(msg, "ADC:%4lu | V:%d.%02dV | R_ldr:%d kohm | Lux:%d.%d\r\n", adc_value, volt_entier, volt_dec, rldr_kohm, lux_entier, lux_dec);
+          HAL_UART_Transmit(&huart2, (uint8_t*)msg, len, HAL_MAX_DELAY);
 
       // 5. COMMANDE DE LA LED (Seuil : 50 Lux)
-      if (lux < 50.0) {
-          HAL_GPIO_WritePin(GPIOA, GPIO_PIN_4, GPIO_PIN_SET);   // Allume (Nuit)
-      } else {
-          HAL_GPIO_WritePin(GPIOA, GPIO_PIN_4, GPIO_PIN_RESET); // Éteint (Jour)
-      }
+      //if (lux < 50.0) {
+      //    HAL_GPIO_WritePin(GPIOA, GPIO_PIN_4, GPIO_PIN_SET);   // Allume (Nuit)
+      //} else {
+      //    HAL_GPIO_WritePin(GPIOA, GPIO_PIN_4, GPIO_PIN_RESET); // Éteint (Jour)
+      //}
 
       HAL_Delay(500); // On attend 0.5 seconde entre chaque mesure
     }
@@ -238,7 +254,7 @@ static void MX_ADC1_Init(void)
   hadc1.Init.ExternalTrigConvEdge = ADC_EXTERNALTRIGCONVEDGE_NONE;
   hadc1.Init.DMAContinuousRequests = DISABLE;
   hadc1.Init.Overrun = ADC_OVR_DATA_PRESERVED;
-  hadc1.Init.SamplingTimeCommon1 = ADC_SAMPLETIME_1CYCLE_5;
+  hadc1.Init.SamplingTimeCommon1 = ADC_SAMPLETIME_160CYCLES_5;
   hadc1.Init.SamplingTimeCommon2 = ADC_SAMPLETIME_1CYCLE_5;
   hadc1.Init.OversamplingMode = DISABLE;
   hadc1.Init.TriggerFrequencyMode = ADC_TRIGGER_FREQ_HIGH;
@@ -249,7 +265,7 @@ static void MX_ADC1_Init(void)
 
   /** Configure Regular Channel
   */
-  sConfig.Channel = ADC_CHANNEL_8;
+  sConfig.Channel = ADC_CHANNEL_9;
   sConfig.Rank = ADC_REGULAR_RANK_1;
   sConfig.SamplingTime = ADC_SAMPLINGTIME_COMMON_1;
   if (HAL_ADC_ConfigChannel(&hadc1, &sConfig) != HAL_OK)
@@ -257,8 +273,52 @@ static void MX_ADC1_Init(void)
     Error_Handler();
   }
   /* USER CODE BEGIN ADC1_Init 2 */
+  // Correction : PA5 = ADC_CHANNEL_5 (pas CHANNEL_9)
 
   /* USER CODE END ADC1_Init 2 */
+
+}
+
+/**
+  * @brief DAC1 Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_DAC1_Init(void)
+{
+
+  /* USER CODE BEGIN DAC1_Init 0 */
+
+  /* USER CODE END DAC1_Init 0 */
+
+  DAC_ChannelConfTypeDef sConfig = {0};
+
+  /* USER CODE BEGIN DAC1_Init 1 */
+
+  /* USER CODE END DAC1_Init 1 */
+
+  /** DAC Initialization
+  */
+  hdac1.Instance = DAC1;
+  if (HAL_DAC_Init(&hdac1) != HAL_OK)
+  {
+    Error_Handler();
+  }
+
+  /** DAC channel OUT1 config
+  */
+  sConfig.DAC_SampleAndHold = DAC_SAMPLEANDHOLD_DISABLE;
+  sConfig.DAC_Trigger = DAC_TRIGGER_NONE;
+  sConfig.DAC_OutputBuffer = DAC_OUTPUTBUFFER_DISABLE;
+  sConfig.DAC_ConnectOnChipPeripheral = DAC_CHIPCONNECT_INTERNAL;
+  sConfig.DAC_UserTrimming = DAC_TRIMMING_FACTORY;
+  if (HAL_DAC_ConfigChannel(&hdac1, &sConfig, DAC_CHANNEL_1) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN DAC1_Init 2 */
+
+  /* USER CODE END DAC1_Init 2 */
 
 }
 
@@ -328,10 +388,10 @@ static void MX_GPIO_Init(void)
   __HAL_RCC_GPIOB_CLK_ENABLE();
 
   /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(GPIOA, GPIO_PIN_5, GPIO_PIN_RESET);
+  HAL_GPIO_WritePin(GPIOA, GPIO_PIN_4, GPIO_PIN_RESET);
 
-  /*Configure GPIO pin : PA5 */
-  GPIO_InitStruct.Pin = GPIO_PIN_5;
+  /*Configure GPIO pin : PA4 */
+  GPIO_InitStruct.Pin = GPIO_PIN_4;
   GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
@@ -365,9 +425,9 @@ void Error_Handler(void)
   while (1)
   {
   }
-}
-  /* USER CODE END Error_Handler_Debug */
 
+  /* USER CODE END Error_Handler_Debug */
+}
 
 #ifdef  USE_FULL_ASSERT
 /**
