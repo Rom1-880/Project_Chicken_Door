@@ -57,7 +57,7 @@ float lux = 0.0f;
 char msg[100];
 
 // Paramètres du montage
-const float R_FIXED = 100000.0f; // résistance de 100k
+const float R_FIXED = 29000.0f; // résistance de 100k
 const float VCC = 3.3f;
 
 /* USER CODE END PV */
@@ -141,7 +141,7 @@ int main(void)
       // On vérifie que voltage > 0 pour éviter de diviser par zéro
       if (voltage > 0.1f) {
           // Formule du pont diviseur inversée pour trouver R_ldr
-          R_ldr = (VCC * R_FIXED / voltage) - R_FIXED;
+          R_ldr = (VCC * R_FIXED/ voltage) - R_FIXED;
 
           // Formule d'approximation Lux (standard pour une LDR de 10k-100k)
           // Lux = 500 / (R_ldr en kOhm)
@@ -170,7 +170,7 @@ int main(void)
       //    HAL_GPIO_WritePin(GPIOA, GPIO_PIN_4, GPIO_PIN_RESET); // Éteint (Jour)
       //}
 
-      HAL_Delay(500); // On attend 0.5 seconde entre chaque mesure
+      HAL_Delay(500); // On attend 0.5 secondes entre chaque mesure
     }
 
     /* USER CODE END WHILE */
@@ -265,7 +265,7 @@ static void MX_ADC1_Init(void)
 
   /** Configure Regular Channel
   */
-  sConfig.Channel = ADC_CHANNEL_9;
+  sConfig.Channel = ADC_CHANNEL_4;
   sConfig.Rank = ADC_REGULAR_RANK_1;
   sConfig.SamplingTime = ADC_SAMPLINGTIME_COMMON_1;
   if (HAL_ADC_ConfigChannel(&hadc1, &sConfig) != HAL_OK)
