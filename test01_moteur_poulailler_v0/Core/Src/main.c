@@ -37,12 +37,13 @@
 
 /* Private variables ---------------------------------------------------------*/
 
-COM_InitTypeDef BspCOMInit;
 ADC_HandleTypeDef hadc1;
 
 LPTIM_HandleTypeDef hlptim1;
 
 TIM_HandleTypeDef htim1;
+
+UART_HandleTypeDef huart2;
 
 /* USER CODE BEGIN PV */
 uint16_t current_speed = 900; // On fixe une vitesse par défaut pour les tests
@@ -70,6 +71,7 @@ static void MX_GPIO_Init(void);
 static void MX_TIM1_Init(void);
 static void MX_LPTIM1_Init(void);
 static void MX_ADC1_Init(void);
+static void MX_USART2_UART_Init(void);
 /* USER CODE BEGIN PFP */
 //test
 /* USER CODE END PFP */
@@ -140,14 +142,14 @@ float Get_Motor_Current(void)
 {
    extern ADC_HandleTypeDef hadc1;
    uint32_t raw_value = 0;
-   float res_ohm = 4.5f;
-   float offset = 0.00f;
-   HAL_ADC_Start(&hadc1);
-   if (HAL_ADC_PollForConversion(&hadc1, 10) == HAL_OK) {
+   float res_ohm = 1.3f;
+   float offset = 0.090f;
+    HAL_ADC_Start(&hadc1);
+   if (HAL_ADC_PollForConversion(&hadc1, 100) == HAL_OK) {
        adc_value = HAL_ADC_GetValue(&hadc1);
        // Formule : Courant = Tension / Résistance
        // Tension = (Valeur_ADC / 4095) * 3.3V
-       motor_current = (((adc_value * 3.3f) / 4095.0f) / res_ohm);
+       motor_current = (((adc_value * 3.3f) / 4095.0f) / res_ohm)*1.103;
 
        motor_current -= offset;
 
@@ -207,6 +209,7 @@ int main(void)
   MX_TIM1_Init();
   MX_LPTIM1_Init();
   MX_ADC1_Init();
+  MX_USART2_UART_Init();
   /* USER CODE BEGIN 2 */
  HAL_TIM_PWM_Start(&htim1, TIM_CHANNEL_4); // Changé de CHANNEL_1 à CHANNEL_4
  __HAL_TIM_MOE_ENABLE(&htim1);
@@ -219,33 +222,22 @@ int main(void)
   /* Initialize USER push-button, will be used to trigger an interrupt each time it's pressed.*/
   BSP_PB_Init(BUTTON_USER, BUTTON_MODE_EXTI);
 
-  /* Initialize COM1 port (115200, 8 bits (7-bit data + 1 stop bit), no parity */
-  BspCOMInit.BaudRate   = 115200;
-  BspCOMInit.WordLength = COM_WORDLENGTH_8B;
-  BspCOMInit.StopBits   = COM_STOPBITS_1;
-  BspCOMInit.Parity     = COM_PARITY_NONE;
-  BspCOMInit.HwFlowCtl  = COM_HWCONTROL_NONE;
-  if (BSP_COM_Init(COM1, &BspCOMInit) != BSP_ERROR_NONE)
-  {
-    Error_Handler();
-  }
-
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
  while (1)
  {
 	  // On écoute le port série (115200 baud)
-	      if (HAL_UART_Receive(&hcom_uart[COM1], &rx_data, 1, 10) == HAL_OK)
+	 	 if (HAL_UART_Receive(&huart2, &rx_data, 1, 10) == HAL_OK)
 	      {
 	        // Echo : on renvoie le caractère au PC pour confirmer
-	        HAL_UART_Transmit(&hcom_uart[COM1], &rx_data, 1, 10);
+	 		HAL_UART_Transmit(&huart2, &rx_data, 1, 10);
 	        // On traite la commande
 	        switch(rx_data)
 	        {
 	          case 'D': Motor_Forward(); break;
 	          case 'A': Motor_Reverse(); break;
 	          case 'S': Motor_Stop();    break;
-	          // Bonus : réglage de la vitesse au clavier
+	          // réglage de la vitesse
 	          case '+': Motor_SetSpeed(current_speed + 100); break;
 	          case '-': Motor_SetSpeed(current_speed - 100); break;
 	        }
@@ -253,7 +245,7 @@ int main(void)
 	                // \r\n sert à revenir à la ligne dans ton terminal
 	                sprintf(msg, "\r\nCommande: %c | Vitesse: %d\r\n", rx_data, current_speed);
 	        // On envoie le texte converti
-	        HAL_UART_Transmit(&hcom_uart[COM1], (uint8_t*)msg, strlen(msg), 100);
+	        HAL_UART_Transmit(&huart2, (uint8_t*)msg, strlen(msg), 100);
 	    }
 	      // Mesure du courant et sécurité blocage
 	      uint32_t current_time = HAL_GetTick();
@@ -274,8 +266,8 @@ int main(void)
 	          }
 
 	          // Affichage stable
-	          int len = sprintf(msg, "I_Avg: %.2f A | ADC : %lu\r\n", average_current, adc_value);
-	          HAL_UART_Transmit(&hcom_uart[COM1], (uint8_t*)msg, len, 50);
+	          int len = sprintf(msg, "I_Avg: %.3f A | ADC : %lu\r\n", average_current, adc_value);
+	          HAL_UART_Transmit(&huart2, (uint8_t*)msg, len, 50);
 	      }
 
     /* USER CODE END WHILE */
@@ -487,6 +479,54 @@ static void MX_TIM1_Init(void)
   /* USER CODE BEGIN TIM1_Init 2 */
   /* USER CODE END TIM1_Init 2 */
   HAL_TIM_MspPostInit(&htim1);
+
+}
+
+/**
+  * @brief USART2 Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_USART2_UART_Init(void)
+{
+
+  /* USER CODE BEGIN USART2_Init 0 */
+
+  /* USER CODE END USART2_Init 0 */
+
+  /* USER CODE BEGIN USART2_Init 1 */
+
+  /* USER CODE END USART2_Init 1 */
+  huart2.Instance = USART2;
+  huart2.Init.BaudRate = 115200;
+  huart2.Init.WordLength = UART_WORDLENGTH_8B;
+  huart2.Init.StopBits = UART_STOPBITS_1;
+  huart2.Init.Parity = UART_PARITY_NONE;
+  huart2.Init.Mode = UART_MODE_TX_RX;
+  huart2.Init.HwFlowCtl = UART_HWCONTROL_NONE;
+  huart2.Init.OverSampling = UART_OVERSAMPLING_16;
+  huart2.Init.OneBitSampling = UART_ONE_BIT_SAMPLE_DISABLE;
+  huart2.Init.ClockPrescaler = UART_PRESCALER_DIV1;
+  huart2.AdvancedInit.AdvFeatureInit = UART_ADVFEATURE_NO_INIT;
+  if (HAL_UART_Init(&huart2) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  if (HAL_UARTEx_SetTxFifoThreshold(&huart2, UART_TXFIFO_THRESHOLD_1_8) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  if (HAL_UARTEx_SetRxFifoThreshold(&huart2, UART_RXFIFO_THRESHOLD_1_8) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  if (HAL_UARTEx_DisableFifoMode(&huart2) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN USART2_Init 2 */
+
+  /* USER CODE END USART2_Init 2 */
 
 }
 
