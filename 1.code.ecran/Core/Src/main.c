@@ -21,7 +21,7 @@
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
-
+#include <string.h>
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -44,8 +44,9 @@
 UART_HandleTypeDef huart2;
 
 /* USER CODE BEGIN PV */
-uint8_t caractere_recu[1];  // La boîte aux lettres pour stocker la touche reçue
-
+uint8_t rx_byte[1];       // La boîte pour recevoir 1 seule lettre à la fois
+char rx_buffer[20];       // Le carnet (buffer) pour écrire le mot en entier (max 20 lettres)
+uint8_t rx_index = 0;     // Le stylo (l'index) qui retient à quelle case on est rendu
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -92,7 +93,12 @@ int main(void)
   MX_GPIO_Init();
   MX_USART2_UART_Init();
   /* USER CODE BEGIN 2 */
-  HAL_UART_Receive_IT(&huart2, caractere_recu, 1);
+  // 1. Envoi du message de démarrage UNE SEULE FOIS
+  uint8_t message[] = "Test de la carte OK ! En attente d'ordres...\r\n";
+  HAL_UART_Transmit(&huart2, message, sizeof(message)-1, 1000);
+
+  // 2. Armement de l'interruption pour écouter le premier caractère
+  HAL_UART_Receive_IT(&huart2, rx_byte, 1);
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -102,15 +108,8 @@ int main(void)
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
-	  // Création du message à envoyer
-	        uint8_t message[] = "Test de la carte OK !\r\n";
-
-	        // Envoi de la trame série via l'UART2
-	        // Paramètres : Le port UART, le message, la taille du message, le délai d'attente max
-	        HAL_UART_Transmit(&huart2, message, sizeof(message)-1, 1000);
-
-	        // Pause de 1 seconde (1000 millisecondes) pour ne pas saturer le PC
-	        HAL_Delay(1000);
+	  // Le processeur ne fait RIEN ici pour l'instant.
+	  // Il attend sagement qu'une interruption UART "sonne" !
   }
   /* USER CODE END 3 */
 }
@@ -220,35 +219,53 @@ static void MX_GPIO_Init(void)
 }
 
 /* USER CODE BEGIN 4 */
-// Cette fonction est appelée AUTOMATIQUEMENT à chaque fois qu'un caractère est reçu
 void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
 {
-    // On vérifie que c'est bien l'UART2 qui a sonné (au cas où on en aurait plusieurs)
     if (huart->Instance == USART2)
     {
-        // 1. ACTION : On regarde ce qu'il y a dans la boîte aux lettres jsp test
-        if (caractere_recu[0] == 'A')
+        // 1. Est-ce que la lettre qu'on vient de recevoir est un "Retour à la ligne" ?
+        // (Sur Hercules, quand tu envoies un mot, ça ajoute souvent \r ou \n à la fin)
+        if (rx_byte[0] == '\r' || rx_byte[0] == '\n')
         {
-            // Si on a tapé 'ON' (majuscule) sur Hercules
-            uint8_t msg1[] = "\r\nTu as appuye sur A - Allumage ecran\r\n";
-            HAL_UART_Transmit(&huart2, msg1, sizeof(msg1)-1, 10);
-        }
-        else if (caractere_recu[0] == 'B')
-        {
-            // Si on a tapé 'B' sur Hercules
-            uint8_t msg2[] = "\r\nTu as appuye sur B - Extinction ecran\r\n";
-            HAL_UART_Transmit(&huart2, msg2, sizeof(msg2)-1, 10);
+            // OUI ! C'est la fin du mot. On ferme le mot proprement avec '\0' (règle du langage C)
+            rx_buffer[rx_index] = '\0';
+
+            // 2. On compare le mot avec "ON" (strcmp renvoie 0 si les mots sont identiques)
+            if (strcmp(rx_buffer, "ON") == 0)
+            {
+                uint8_t msg1[] = "--> J'ai compris : ALLUMAGE\r\n";
+                HAL_UART_Transmit(&huart2, msg1, sizeof(msg1)-1, 10);
+            }
+            // 3. Sinon, on compare avec "OFF"
+            else if (strcmp(rx_buffer, "OFF") == 0)
+            {
+                uint8_t msg2[] = "--> J'ai compris : EXTINCTION\r\n";
+                HAL_UART_Transmit(&huart2, msg2, sizeof(msg2)-1, 10);
+            }
+            // 4. Optionnel : si on a tapé un mot qu'il ne connait pas
+            else if (rx_index > 0) // Si le mot n'est pas vide
+            {
+                uint8_t msg3[] = "--> Commande inconnue...\r\n";
+                HAL_UART_Transmit(&huart2, msg3, sizeof(msg3)-1, 10);
+            }
+
+            // 5. TRES IMPORTANT : On a fini de lire, on remet le "stylo" à zéro
+            // pour écrire le prochain mot au début du carnet !
+            rx_index = 0;
         }
         else
         {
-            // Si c'est une autre touche
-            uint8_t msg3[] = "\r\nTouche inconnue...\r\n";
-            HAL_UART_Transmit(&huart2, msg3, sizeof(msg3)-1, 10);
+            // NON, ce n'est pas la fin du mot. C'est une lettre normale (ex: 'O' ou 'N')
+            // On l'ajoute dans notre carnet, tant qu'il y a de la place
+            if (rx_index < 19)
+            {
+                rx_buffer[rx_index] = rx_byte[0]; // On écrit la lettre
+                rx_index++;                       // On avance le stylo d'une case
+            }
         }
 
-        // 2. TRES IMPORTANT : On réarme le piège pour le prochain caractère !
-        // Si on oublie cette ligne, le STM32 n'écoutera plus jamais.
-        HAL_UART_Receive_IT(&huart2, caractere_recu, 1);
+        // 6. On réarme l'interruption pour écouter la PROCHAINE lettre
+        HAL_UART_Receive_IT(&huart2, rx_byte, 1);
     }
 }
 /* USER CODE END 4 */
