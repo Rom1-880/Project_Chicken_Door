@@ -146,7 +146,7 @@ void Motor_Stop(void)
    HAL_GPIO_WritePin(GPIOA, GPIO_PIN_11, GPIO_PIN_RESET);
    HAL_GPIO_WritePin(GPIOB, GPIO_PIN_2, GPIO_PIN_RESET);
    motor_state = MOTOR_OFF;
-   dynamic_threshold = 99.0f; // Reset du seuil
+   dynamic_threshold = 1.0f; // Reset du seuil
 }
 
 
@@ -296,7 +296,7 @@ int main(void)
 	 	        // Après 1s de calibration (total 3s), on fixe le seuil
 	 	        normal_running_current = average_current;
 	 	        if(normal_running_current < 0.05f) normal_running_current = 0.05f; // Minimum vital
-	 	        dynamic_threshold = normal_running_current *1.1f; // multiplicateur pour laisser une marge au threshold par rapport au normal_running_current
+	 	        dynamic_threshold = normal_running_current *1.2f; // multiplicateur pour laisser une marge au threshold par rapport au normal_running_current
 	 	        motor_state = MOTOR_RUNNING;
 
 	 	        int len = sprintf(msg, "Seuil fixé à: %.2f A\r\n", dynamic_threshold);
