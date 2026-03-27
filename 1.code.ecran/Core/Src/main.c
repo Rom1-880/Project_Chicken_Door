@@ -95,6 +95,10 @@ int main(void)
   MX_GPIO_Init();
   MX_USART2_UART_Init();
   /* USER CODE BEGIN 2 */
+
+  // ---> NOUVEAU : On allume la LED verte (Simulation de l'écran ALLUMÉ)
+  HAL_GPIO_WritePin(GPIOA, GPIO_PIN_5, GPIO_PIN_SET);
+
   // 1. Envoi du message de démarrage UNE SEULE FOIS
   uint8_t message[] = "Test de la carte OK ! En attente d'ordres...\r\n";
   HAL_UART_Transmit(&huart2, message, sizeof(message)-1, 1000);
@@ -120,6 +124,9 @@ int main(void)
 	            // On prépare un message pour avertir le PC
 	            uint8_t msg_veille[] = "Zzz... 10s d'inactivite, je passe en VEILLE !\r\n";
 	            HAL_UART_Transmit(&huart2, msg_veille, sizeof(msg_veille)-1, 10);
+
+	            // ---> NOUVEAU : On éteint la LED verte (Simulation de l'écran ÉTEINT)
+	            HAL_GPIO_WritePin(GPIOA, GPIO_PIN_5, GPIO_PIN_RESET);
 
 	            // NOTE POUR PLUS TARD : C'est ici que tu mettras la VRAIE fonction
 	            // pour couper l'alimentation de l'écran TFT et endormir le STM32.
@@ -226,11 +233,22 @@ static void MX_USART2_UART_Init(void)
   */
 static void MX_GPIO_Init(void)
 {
+  GPIO_InitTypeDef GPIO_InitStruct = {0};
 /* USER CODE BEGIN MX_GPIO_Init_1 */
 /* USER CODE END MX_GPIO_Init_1 */
 
   /* GPIO Ports Clock Enable */
   __HAL_RCC_GPIOA_CLK_ENABLE();
+
+  /*Configure GPIO pin Output Level */
+  HAL_GPIO_WritePin(GPIOA, GPIO_PIN_5, GPIO_PIN_RESET);
+
+  /*Configure GPIO pin : PA5 */
+  GPIO_InitStruct.Pin = GPIO_PIN_5;
+  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+  HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
 
 /* USER CODE BEGIN MX_GPIO_Init_2 */
 /* USER CODE END MX_GPIO_Init_2 */
@@ -251,6 +269,9 @@ void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
             // ---> AJOUT : On met à jour le chronomètre car on a reçu un ordre validé !
             temps_dernier_ordre = HAL_GetTick();
             // <---
+
+            // ---> NOUVEAU : On rallume l'écran car on a de l'activité !
+            HAL_GPIO_WritePin(GPIOA, GPIO_PIN_5, GPIO_PIN_SET);
 
             // 2. On compare le mot avec "ON" (strcmp renvoie 0 si les mots sont identiques)
             if (strcmp(rx_buffer, "ON") == 0)
