@@ -49,8 +49,7 @@ UART_HandleTypeDef huart2;
 uint16_t current_speed = 900; // On fixe une vitesse par défaut pour les tests
 uint8_t rx_data;              // Variable pour stocker le caractère reçu
 extern UART_HandleTypeDef hcom_uart[];
-char msg[50]; // Buffer pour construire les messages texte
-
+char msg[100];
 
 // lecture courant moteur
 uint32_t adc_value = 0;
@@ -63,6 +62,21 @@ uint32_t last_tick = 0; // Pour l'envoi périodique
 float readings[5] = {0.0f, 0.0f, 0.0f, 0.0f, 0.0f};
 float current_sum = 0.0f;
 float average_current = 0.0f;
+
+// sécurité courant
+float normal_running_current = 0.0f; // courant de fonctionnement normal du moteur
+float dynamic_threshold = 99.0f; // limite définie
+int security_counter = 0;       // Arret du moteur après 5 relevé > threshold
+uint32_t motor_start_time = 0;
+typedef enum {
+    MOTOR_OFF,
+    MOTOR_STARTING,
+    MOTOR_CALIBRATING,
+    MOTOR_RUNNING
+} MotorState_t;
+
+MotorState_t motor_state = MOTOR_OFF;
+
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -93,6 +107,11 @@ void Motor_Forward(void)
 // Lancement de TIM1 + set de la vitesse
    __HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_4, current_speed);
    HAL_TIM_PWM_Start(&htim1, TIM_CHANNEL_4);
+
+// Timer démarage moteur +  security_counter
+   motor_start_time = HAL_GetTick();
+   motor_state = MOTOR_STARTING;
+   security_counter = 0;
 }
 void Motor_Reverse(void)
 {
@@ -110,6 +129,11 @@ void Motor_Reverse(void)
    HAL_LPTIM_PWM_Start(&hlptim1, LPTIM_CHANNEL_1);
    __HAL_LPTIM_COMPARE_SET(&hlptim1, LPTIM_CHANNEL_1, current_speed);
 
+// Timer démarage moteur +  security_counter
+   motor_start_time = HAL_GetTick();
+   motor_state = MOTOR_STARTING;
+   security_counter = 0;
+
 }
 void Motor_Stop(void)
 {
@@ -121,7 +145,12 @@ void Motor_Stop(void)
 // PINS A ZERO
    HAL_GPIO_WritePin(GPIOA, GPIO_PIN_11, GPIO_PIN_RESET);
    HAL_GPIO_WritePin(GPIOB, GPIO_PIN_2, GPIO_PIN_RESET);
+   motor_state = MOTOR_OFF;
+   dynamic_threshold = 99.0f; // Reset du seuil
 }
+
+
+
 
 void Motor_SetSpeed(uint16_t speed)
 {
@@ -248,27 +277,54 @@ int main(void)
 	        HAL_UART_Transmit(&huart2, (uint8_t*)msg, strlen(msg), 100);
 	    }
 	      // Mesure du courant et sécurité blocage
-	      uint32_t current_time = HAL_GetTick();
-	      if (current_time - last_tick >= 100)
-	      {
-	          last_tick = current_time;
+	 	uint32_t current_time = HAL_GetTick();
+	 	if (current_time - last_tick >= 500) // Toutes les 500ms
+	 	{
+	 	    last_tick = current_time;
+	 	    float instant_current = Get_Motor_Current();
+	 	    average_current = Update_Moving_Average(instant_current);
 
-	          // 1. On récupère la mesure "instantanée"
-	          float instant_current = Get_Motor_Current();
+	 	    uint32_t elapsed = current_time - motor_start_time;
 
-	          // 2. On l'ajoute à notre moyenne glissante de 5 valeurs
-	          average_current = Update_Moving_Average(instant_current);
+	 	    // --- MACHINE A ETATS DE SECURITE ---
+	 	    if (motor_state == MOTOR_STARTING && elapsed > 2000) {
+	 	        // Après 2s, on commence à calibrer
+	 	        motor_state = MOTOR_CALIBRATING;
+	 	        HAL_UART_Transmit(&huart2, (uint8_t*)"Calibrage...\r\n", 14, 10);
+	 	    }
+	 	    else if (motor_state == MOTOR_CALIBRATING && elapsed > 3000) {
+	 	        // Après 1s de calibration (total 3s), on fixe le seuil
+	 	        normal_running_current = average_current;
+	 	        if(normal_running_current < 0.05f) normal_running_current = 0.05f; // Minimum vital
+	 	        dynamic_threshold = normal_running_current *1.1f; // multiplicateur pour laisser une marge au threshold par rapport au normal_running_current
+	 	        motor_state = MOTOR_RUNNING;
 
-	          // 3. On utilise 'average_current' pour la sécurité et l'affichage
-	          if (current_speed > 0 && average_current > CURRENT_THRESHOLD)
-	          {
-	              // Alerte blocage...
-	          }
+	 	        int len = sprintf(msg, "Seuil fixé à: %.2f A\r\n", dynamic_threshold);
+	 	        HAL_UART_Transmit(&huart2, (uint8_t*)msg, len, 50);
+	 	    }
+	 	    else if (motor_state == MOTOR_RUNNING) {
+	 	        // SURVEILLANCE ACTIVE
+	 	        if (average_current > dynamic_threshold) {
+	 	            security_counter++;
+	 	            if (security_counter >= 5) {
+	 	                Motor_Stop();
+	 	                HAL_UART_Transmit(&huart2, (uint8_t*)"!!! BLOCAGE DETECTE - ARRET !!!\r\n", 33, 100);
+	 	            }
+	 	        } else {
+	 	            security_counter = 0; // Reset si le courant redescend
+	 	        }
+	 	    }
 
-	          // Affichage stable
-	          int len = sprintf(msg, "I_Avg: %.3f A | ADC : %lu\r\n", average_current, adc_value);
-	          HAL_UART_Transmit(&huart2, (uint8_t*)msg, len, 50);
-	      }
+	 	    // Affichage pour debug
+	 	   int len = sprintf(msg, "I:%.3fA \r\n|threshold:%.3fA| normal_current:%.3fA \r\n|counter :%d |Stat:%d\r\n",
+	 	                     average_current,
+	 	                     dynamic_threshold,
+	 	                     normal_running_current,
+	 	                     security_counter,
+	 	                     (int)motor_state);
+
+	 	   HAL_UART_Transmit(&huart2, (uint8_t*)msg, len, 50);
+	 	}
 
     /* USER CODE END WHILE */
 
