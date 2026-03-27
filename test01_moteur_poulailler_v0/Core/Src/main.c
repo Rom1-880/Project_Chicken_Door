@@ -48,34 +48,34 @@ UART_HandleTypeDef huart2;
 /* USER CODE BEGIN PV */
 uint16_t current_speed = 900; // On fixe une vitesse par défaut pour les tests
 uint8_t rx_data;              // Variable pour stocker le caractère reçu
-extern UART_HandleTypeDef hcom_uart[];
 char msg[100];
 
 // lecture courant moteur
 uint32_t adc_value = 0;
-float motor_current = 0.0;
-const float CURRENT_THRESHOLD = 0.8; // Seuil de blocage à 800mA (à ajuster)
+float courant_moteur = 0.0;
 uint32_t last_tick = 0; // Pour l'envoi périodique
 
 
 // moyenne courant moteur
-float readings[5] = {0.0f, 0.0f, 0.0f, 0.0f, 0.0f};
-float current_sum = 0.0f;
-float average_current = 0.0f;
+float lecture[5] = {0.0f, 0.0f, 0.0f, 0.0f, 0.0f};
+float somme_courant = 0.0f;
+float moyenne_courant = 0.0f;
 
 // sécurité courant
-float normal_running_current = 0.0f; // courant de fonctionnement normal du moteur
-float dynamic_threshold = 99.0f; // limite définie
-int security_counter = 0;       // Arret du moteur après 5 relevé > threshold
+float courant_fonctionnement_morteur = 0.0f; // courant de fonctionnement normal du moteur
+float threshold = 0.9f; // limite définie
+int compteur_securite = 0;       // Arret du moteur après 5 relevé > threshold
 uint32_t motor_start_time = 0;
 typedef enum {
-    MOTOR_OFF,
-    MOTOR_STARTING,
-    MOTOR_CALIBRATING,
-    MOTOR_RUNNING
+	MOTEUR_OFF,
+	DEMARRAGE_MOTEUR,
+	CALIBRATION_MOTEUR,
+    MOTEUR_MARCHE,
 } MotorState_t;
 
-MotorState_t motor_state = MOTOR_OFF;
+MotorState_t motor_state = MOTEUR_OFF;
+
+uint32_t elapsed = 0; // On la met ici pour qu'elle soit accessible partout
 
 /* USER CODE END PV */
 
@@ -110,8 +110,9 @@ void Motor_Forward(void)
 
 // Timer démarage moteur +  security_counter
    motor_start_time = HAL_GetTick();
-   motor_state = MOTOR_STARTING;
-   security_counter = 0;
+   motor_state = DEMARRAGE_MOTEUR;
+   compteur_securite = 0;
+   elapsed = 0;
 }
 void Motor_Reverse(void)
 {
@@ -131,8 +132,8 @@ void Motor_Reverse(void)
 
 // Timer démarage moteur +  security_counter
    motor_start_time = HAL_GetTick();
-   motor_state = MOTOR_STARTING;
-   security_counter = 0;
+   motor_state = DEMARRAGE_MOTEUR;
+   compteur_securite = 0;
 
 }
 void Motor_Stop(void)
@@ -145,8 +146,8 @@ void Motor_Stop(void)
 // PINS A ZERO
    HAL_GPIO_WritePin(GPIOA, GPIO_PIN_11, GPIO_PIN_RESET);
    HAL_GPIO_WritePin(GPIOB, GPIO_PIN_2, GPIO_PIN_RESET);
-   motor_state = MOTOR_OFF;
-   dynamic_threshold = 1.0f; // Reset du seuil
+   motor_state = MOTEUR_OFF;
+   threshold = 1.0f; // Reset du seuil
 }
 
 
@@ -159,9 +160,6 @@ void Motor_SetSpeed(uint16_t speed)
    current_speed = speed;
 
 
-   uint8_t rx_data = 0;
-   extern UART_HandleTypeDef hcom_uart[];
-
    // Mise à jour immédiate des registres pour les deux timers
    __HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_4, current_speed);
    __HAL_LPTIM_COMPARE_SET(&hlptim1, LPTIM_CHANNEL_1, current_speed);
@@ -169,7 +167,6 @@ void Motor_SetSpeed(uint16_t speed)
 // Lecture courant moteur
 float Get_Motor_Current(void)
 {
-   extern ADC_HandleTypeDef hadc1;
    uint32_t raw_value = 0;
    float res_ohm = 1.3f;
    float offset = 0.090f;
@@ -178,34 +175,34 @@ float Get_Motor_Current(void)
        adc_value = HAL_ADC_GetValue(&hadc1);
        // Formule : Courant = Tension / Résistance
        // Tension = (Valeur_ADC / 4095) * 3.3V
-       motor_current = (((adc_value * 3.3f) / 4095.0f) / res_ohm)*1.103;
+       courant_moteur = (((adc_value * 3.3f) / 4095.0f) / res_ohm)*1.103;
 
-       motor_current -= offset;
+       courant_moteur -= offset;
 
         // On évite d'afficher des valeurs négatives
-        if (motor_current < 0) motor_current = 0;
+        if (courant_moteur < 0) courant_moteur = 0;
    }
    HAL_ADC_Stop(&hadc1);
-   return motor_current;
+   return courant_moteur;
 }
 
 float Update_Moving_Average(float new_sample)
 {
     // 1. Décalage des valeurs (Shift)
-    readings[0] = readings[1];
-    readings[1] = readings[2];
-    readings[2] = readings[3];
-    readings[3] = readings[4];
-    readings[4] = new_sample;
+	lecture[0] = lecture[1];
+	lecture[1] = lecture[2];
+	lecture[2] = lecture[3];
+	lecture[3] = lecture[4];
+	lecture[4] = new_sample;
 
     // 2. Calcul de la somme
-    current_sum = 0;
+    somme_courant = 0;
     for(int i = 0; i < 5; i++) {
-        current_sum += readings[i];
+    	somme_courant += lecture[i];
     }
 
     // 3. Retourne la moyenne
-    return current_sum / 5.0f;
+    return somme_courant / 5.0f;
 }
 /* USER CODE END 0 */
 
@@ -282,46 +279,60 @@ int main(void)
 	 	{
 	 	    last_tick = current_time;
 	 	    float instant_current = Get_Motor_Current();
-	 	    average_current = Update_Moving_Average(instant_current);
+	 	   moyenne_courant = Update_Moving_Average(instant_current);
 
-	 	    uint32_t elapsed = current_time - motor_start_time;
+
+	 	   // MISE À JOUR DU TIMER
+	 	   if (motor_state != MOTEUR_OFF)
+	 	   {
+	 	       elapsed = current_time - motor_start_time;
+	 	   }
 
 	 	    // --- MACHINE A ETATS DE SECURITE ---
-	 	    if (motor_state == MOTOR_STARTING && elapsed > 2000) {
+	 	    if (motor_state == DEMARRAGE_MOTEUR && elapsed > 2000) {
 	 	        // Après 2s, on commence à calibrer
-	 	        motor_state = MOTOR_CALIBRATING;
+	 	        motor_state = CALIBRATION_MOTEUR;
 	 	        HAL_UART_Transmit(&huart2, (uint8_t*)"Calibrage...\r\n", 14, 10);
 	 	    }
-	 	    else if (motor_state == MOTOR_CALIBRATING && elapsed > 3000) {
+	 	    else if (motor_state == CALIBRATION_MOTEUR && elapsed > 3000) {
 	 	        // Après 1s de calibration (total 3s), on fixe le seuil
-	 	        normal_running_current = average_current;
-	 	        if(normal_running_current < 0.05f) normal_running_current = 0.05f; // Minimum vital
-	 	        dynamic_threshold = normal_running_current *1.2f; // multiplicateur pour laisser une marge au threshold par rapport au normal_running_current
-	 	        motor_state = MOTOR_RUNNING;
+	 	    	courant_fonctionnement_morteur = moyenne_courant;
+	 	        if(courant_fonctionnement_morteur < 0.05f) courant_fonctionnement_morteur = 0.05f; // Minimum
+	 	       threshold = courant_fonctionnement_morteur *1.2f; // multiplicateur pour laisser une marge au threshold par rapport au normal_running_current
+	 	        motor_state = MOTEUR_MARCHE;
 
-	 	        int len = sprintf(msg, "Seuil fixé à: %.2f A\r\n", dynamic_threshold);
+	 	        int len = sprintf(msg, "Seuil fixé à: %.2f A\r\n", threshold);
 	 	        HAL_UART_Transmit(&huart2, (uint8_t*)msg, len, 50);
 	 	    }
-	 	    else if (motor_state == MOTOR_RUNNING) {
+	 	   else if (motor_state == MOTEUR_MARCHE && elapsed > 20000) {
+	 		  Motor_Stop();
+	 		  HAL_UART_Transmit(&huart2, (uint8_t*)"FIN DE COURSE (TEMPS)\r\n", 23, 50);
+	 		  elapsed = 0; // remet timer à 0
+
+	 	   	   }
+	 	    else if (motor_state == MOTEUR_MARCHE) {
 	 	        // SURVEILLANCE ACTIVE
-	 	        if (average_current > dynamic_threshold) {
-	 	            security_counter++;
-	 	            if (security_counter >= 5) {
+	 	        if (moyenne_courant > threshold) {
+	 	        	compteur_securite++;
+	 	            if (compteur_securite >= 5) {
 	 	                Motor_Stop();
 	 	                HAL_UART_Transmit(&huart2, (uint8_t*)"!!! BLOCAGE DETECTE - ARRET !!!\r\n", 33, 100);
+	 	 	 		    elapsed = 0; // remet timer à 0
+
 	 	            }
 	 	        } else {
-	 	            security_counter = 0; // Reset si le courant redescend
+	 	        	compteur_securite = 0; // Reset si le courant redescend
 	 	        }
 	 	    }
 
-	 	    // Affichage pour debug
-	 	   int len = sprintf(msg, "I:%.3fA \r\n|threshold:%.3fA| normal_current:%.3fA \r\n|counter :%d |Stat:%d\r\n",
-	 	                     average_current,
-	 	                     dynamic_threshold,
-	 	                     normal_running_current,
-	 	                     security_counter,
-	 	                     (int)motor_state);
+	 	    // Envoie Liaison série
+	 	   int len = sprintf(msg, "I:%.3fA \r\n|threshold:%.3fA| courant_fonctionnement:%.3fA \r\n|counter :%d |Stat:%d TIMER:%lu ms\r\n",
+	 			   	   	     moyenne_courant,
+							 threshold,
+							 courant_fonctionnement_morteur,
+							 compteur_securite,
+	 	                     (int)motor_state,
+							 elapsed);
 
 	 	   HAL_UART_Transmit(&huart2, (uint8_t*)msg, len, 50);
 	 	}
