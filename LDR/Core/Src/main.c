@@ -50,6 +50,13 @@ DAC_HandleTypeDef hdac1;
 UART_HandleTypeDef huart2;
 
 /* USER CODE BEGIN PV */
+
+   //==================================================================//
+  //                INITIALISATION PARTIE LUMINOSITÉ                  //
+ //==================================================================//
+
+
+// Variable pour la mesure de la luminosité
 uint32_t adc_value = 0;
 float voltage = 0.0f;
 float R_ldr = 0.0f;
@@ -57,8 +64,31 @@ float lux = 0.0f;
 char msg[100];
 
 // Paramètres du montage
-const float R_FIXED = 22000.0f; // résistance de 100k
+const float R_FIXED = 22000.0f; // résistance de 100k // Mesure Luminosité
 const float VCC = 3.3f;
+
+
+  //==================================================================//
+ //               INITIALISATION PARTIE ÉNERGIE PILE                 //
+//==================================================================//
+
+
+// Variable pour l'estimation de l'énergie
+uint32_t adc_bat_value = 0;   // Valeur brute lue par l'ADC (0-4095)
+float v_bat_measurer = 0.0f;  // Tension lue sur la pin PA0
+float v_bat_reel = 0.0f;      // Tension réelle de la pile (après correction du pont)
+int bat_pourcentage = 0;       // Résultat final en %
+
+// Paramètres du montage
+const float R10 = 560000.0f; //res 560k Ohm
+const float R11 = 330000.0f; //res 330k Ohm
+
+// Pont Diviseur Pile
+const float PDP_Bat_Coef= (R11+R10)/ R11;
+
+// Seuil des Piles (6V)
+const float V_MAX = 6.0f; // 100%
+const float V_MIN = 4.0f; // 0%
 
 /* USER CODE END PV */
 
@@ -122,23 +152,39 @@ int main(void)
   /* USER CODE BEGIN WHILE */
   while (1)
     {
-      // 1. Lecture de la tension sur PA5 (LDR_INFO)
+
+	  //==================================================================//
+	 //                          LANCEMENT DES ADC                       //
+	//==================================================================//
+
+      // Lecture de la tension sur PA5 (LDR_INFO) // mesurer luminosité
       HAL_ADC_Start(&hadc1);
       if (HAL_ADC_PollForConversion(&hadc1, 10) == HAL_OK)
       {
           adc_value = HAL_ADC_GetValue(&hadc1);
       }
+
+      // Lecture de la tension sur PA0 // Estimation de batterie (PILE)
+      if (HAL_ADC_PollForConversion(&hadc1, 10) == HAL_OK)
+           {
+               adc_bat_value = HAL_ADC_GetValue(&hadc1);
+           }
+
       HAL_ADC_Stop(&hadc1);
 
-      // 2. Conversion : Chiffre ADC -> Tension (Volt)
+      //==================================================================//
+     //                          PARTIE LUMINOSITÉ                       //
+    //==================================================================//
+
+      //  Conversion : Chiffre ADC -> Tension (Volt)
       voltage = (float)adc_value * VCC / 4095.0;
 
       // Calcul de la partie entière et des deux premières décimales
-      //int volt_entier = (int)voltage;
-      //int volt_decimale = (int)((voltage - volt_entier) * 100);
+      	  //int volt_entier = (int)voltage;
+      	  //int volt_decimale = (int)((voltage - volt_entier) * 100);
 
-      // 3. Calcul de la résistance de la LDR puis des Lux
-      // On vérifie que voltage > 0 pour éviter de diviser par zéro
+      //  Calcul de la résistance de la LDR puis des Lux
+      	  // On vérifie que voltage > 0 pour éviter de diviser par zéro
       if (voltage > 0.1f) {
           // Formule du pont diviseur inversée pour trouver R_ldr
           R_ldr = (VCC * R_FIXED/ voltage) - R_FIXED;
@@ -150,19 +196,58 @@ int main(void)
       } else {
           lux = 0.0;
       }
-      // 4. Décomposition pour affichage sans %f
+      //Décomposition pour affichage sans %f
           int volt_entier = (int)voltage;
           int volt_dec    = (int)((voltage - volt_entier) * 100);
           int rldr_kohm   = (int)(R_ldr / 1000.0f);
           int lux_entier  = (int)lux;
           int lux_dec     = (int)((lux - lux_entier) * 10);
 
-          // 5. Affichage sur le PC (VCP / USART2)
+          //==================================================================//
+         //                        PARTIE ÉNERGIE PILE                       //
+        //==================================================================//
+
+//Tension sur la PIN PA0 (entre 0 et 3.3V car elle ne prend que 3.3V)
+          v_bat_measurer = ((float)adc_bat_value) / 4095.0;
+
+// Tension Réel des piles (Application du Coef)
+          v_bat_reel = v_bat_measurer * PDP_Bat_Coef;
+
+      //Calcul du pourcentage (Produit en croix entre V_MIN et V_MAX)
+      if (v_bat_reel > V_MIN){
+    	  bat_pourcentage = (int)(((v_bat_reel - V_MIN)/(V_MAX - V_MIN))*100.0f);
+      } else {
+    	  bat_pourcentage = 0;
+      }
+
+      // Sécurité pour ne pas afficher 102% ou -2%
+          if (bat_pourcentage > 100) bat_pourcentage = 100;
+          if (bat_pourcentage < 0)   bat_pourcentage = 0;
+
+      //Décomposition pour affichage sans %f
+          int v_entier = (int)v_bat_reel;
+          int v_dec = (int)((v_bat_reel - v_entier) * 100);
+
+          //==================================================================//
+         //                       AFFICHAGE LIAISON SÉRIE                    //
+        //==================================================================//
+
+         //Affichage Luminosité
+       // Affichage sur le PC (VCP / USART2)
       // On affiche l'entier (int)lux pour être sûr que ça s'affiche sans config spéciale
       //int len = sprintf(msg, "ADC: %lu |Tension : %d.%02dV | Lux estimat: %d\r\n", adc_value, voltage, (int)lux);
          int len = sprintf(msg, "ADC:%4lu | V:%d.%02dV | R_ldr:%d kohm | Lux:%d.%d\r\n", adc_value, volt_entier, volt_dec, rldr_kohm, lux_entier, lux_dec);
           HAL_UART_Transmit(&huart2, (uint8_t*)msg, len, HAL_MAX_DELAY);
 
+          HAL_Delay(500); // On attend 0.5 secondes entre chaque mesure
+
+
+          //Affichage Batterie Restante
+          int len2 = sprintf(msg, "LDR ADC:%lu | Bat:%d.%02dV (%d%%)\r\n",
+                                adc_value, v_entier, v_dec, bat_pourcentage);
+              HAL_UART_Transmit(&huart2, (uint8_t*)msg, len, 100);
+
+              HAL_Delay(500); // On attend 0.5 secondes entre chaque mesure
       // 5. COMMANDE DE LA LED (Seuil : 50 Lux)
       //if (lux < 50.0) {
       //    HAL_GPIO_WritePin(GPIOA, GPIO_PIN_4, GPIO_PIN_SET);   // Allume (Nuit)
@@ -170,7 +255,7 @@ int main(void)
       //    HAL_GPIO_WritePin(GPIOA, GPIO_PIN_4, GPIO_PIN_RESET); // Éteint (Jour)
       //}
 
-      HAL_Delay(500); // On attend 0.5 secondes entre chaque mesure
+
     }
 
     /* USER CODE END WHILE */
@@ -243,12 +328,12 @@ static void MX_ADC1_Init(void)
   hadc1.Init.ClockPrescaler = ADC_CLOCK_SYNC_PCLK_DIV1;
   hadc1.Init.Resolution = ADC_RESOLUTION_12B;
   hadc1.Init.DataAlign = ADC_DATAALIGN_RIGHT;
-  hadc1.Init.ScanConvMode = ADC_SCAN_DISABLE;
+  hadc1.Init.ScanConvMode = ADC_SCAN_ENABLE;
   hadc1.Init.EOCSelection = ADC_EOC_SINGLE_CONV;
   hadc1.Init.LowPowerAutoWait = DISABLE;
   hadc1.Init.LowPowerAutoPowerOff = DISABLE;
   hadc1.Init.ContinuousConvMode = DISABLE;
-  hadc1.Init.NbrOfConversion = 1;
+  hadc1.Init.NbrOfConversion = 2;
   hadc1.Init.DiscontinuousConvMode = DISABLE;
   hadc1.Init.ExternalTrigConv = ADC_SOFTWARE_START;
   hadc1.Init.ExternalTrigConvEdge = ADC_EXTERNALTRIGCONVEDGE_NONE;
@@ -268,6 +353,15 @@ static void MX_ADC1_Init(void)
   sConfig.Channel = ADC_CHANNEL_5;
   sConfig.Rank = ADC_REGULAR_RANK_1;
   sConfig.SamplingTime = ADC_SAMPLINGTIME_COMMON_1;
+  if (HAL_ADC_ConfigChannel(&hadc1, &sConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+
+  /** Configure Regular Channel
+  */
+  sConfig.Channel = ADC_CHANNEL_4;
+  sConfig.Rank = ADC_REGULAR_RANK_2;
   if (HAL_ADC_ConfigChannel(&hadc1, &sConfig) != HAL_OK)
   {
     Error_Handler();
