@@ -57,7 +57,7 @@ float lux = 0.0f;
 char msg[100];
 
 // Paramètres du montage
-const float R_FIXED = 29000.0f; // résistance de 100k
+const float R_FIXED = 22000.0f; // résistance de 100k
 const float VCC = 3.3f;
 
 /* USER CODE END PV */
