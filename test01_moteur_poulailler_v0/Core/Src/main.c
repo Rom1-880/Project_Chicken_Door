@@ -237,6 +237,9 @@ int main(void)
   MX_ADC1_Init();
   MX_USART2_UART_Init();
   /* USER CODE BEGIN 2 */
+
+  __HAL_UART_ENABLE_IT(&huart2, UART_IT_RXNE);
+
  HAL_TIM_PWM_Start(&htim1, TIM_CHANNEL_4); // Changé de CHANNEL_1 à CHANNEL_4
  __HAL_TIM_MOE_ENABLE(&htim1);
  if (HAL_LPTIM_PWM_Start(&hlptim1, LPTIM_CHANNEL_1) != HAL_OK)
@@ -250,97 +253,123 @@ int main(void)
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
- while (1)
- {
-	  // On écoute le port série (115200 baud)
-	 	 if (HAL_UART_Receive(&huart2, &rx_data, 1, 10) == HAL_OK)
-	      {
-	        // Echo : on renvoie le caractère au PC pour confirmer
-	 		HAL_UART_Transmit(&huart2, &rx_data, 1, 10);
-	        // On traite la commande
-	        switch(rx_data)
-	        {
-	          case 'D': Motor_Forward(); break;
-	          case 'A': Motor_Reverse(); break;
-	          case 'S': Motor_Stop();    break;
-	          // réglage de la vitesse
-	          case '+': Motor_SetSpeed(current_speed + 100); break;
-	          case '-': Motor_SetSpeed(current_speed - 100); break;
-	        }
-	        // On prépare le message texte
-	                // \r\n sert à revenir à la ligne dans ton terminal
-	                sprintf(msg, "\r\nCommande: %c | Vitesse: %d\r\n", rx_data, current_speed);
-	        // On envoie le texte converti
-	        HAL_UART_Transmit(&huart2, (uint8_t*)msg, strlen(msg), 100);
-	    }
-	      // Mesure du courant et sécurité blocage
-	 	uint32_t current_time = HAL_GetTick();
-	 	if (current_time - last_tick >= 500) // Toutes les 500ms
-	 	{
-	 	    last_tick = current_time;
-	 	    float instant_current = Get_Motor_Current();
-	 	   moyenne_courant = Update_Moving_Average(instant_current);
+  while (1)
+  {
+      // 1. GESTION DES COMMANDES UART (REVEIL OU COMMANDE)
+      // On utilise un timeout de 0 pour ne pas bloquer la boucle si rien n'est reçu
+      if (HAL_UART_Receive(&huart2, &rx_data, 1, 0) == HAL_OK)
+      {
+          // Echo : on renvoie le caractère au PC pour confirmer
+          HAL_UART_Transmit(&huart2, &rx_data, 1, 10);
+
+          // On traite la commande
+          switch(rx_data)
+          {
+            case 'D': Motor_Forward(); break;
+            case 'A': Motor_Reverse(); break;
+            case 'S': Motor_Stop();    break;
+            // réglage de la vitesse
+            case '+': Motor_SetSpeed(current_speed + 100); break;
+            case '-': Motor_SetSpeed(current_speed - 100); break;
+          }
+
+          // On prépare le message texte
+          sprintf(msg, "\r\nCommande: %c | Vitesse: %d\r\n", rx_data, current_speed);
+          HAL_UART_Transmit(&huart2, (uint8_t*)msg, strlen(msg), 100);
+      }
+
+      // 2. GESTION DU MOTEUR ET SÉCURITÉ (SI ALLUMÉ)
+      if (motor_state != MOTEUR_OFF)
+      {
+          uint32_t current_time = HAL_GetTick();
+          if (current_time - last_tick >= 500) // Toutes les 500ms
+          {
+              last_tick = current_time;
+              float instant_current = Get_Motor_Current();
+              moyenne_courant = Update_Moving_Average(instant_current);
+
+              // MISE À JOUR DU TIMER
+              elapsed = current_time - motor_start_time;
+
+              // --- MACHINE A ETATS DE SECURITE ---
+              if (motor_state == DEMARRAGE_MOTEUR && elapsed > 2000) {
+                  motor_state = CALIBRATION_MOTEUR;
+                  HAL_UART_Transmit(&huart2, (uint8_t*)"Calibrage...\r\n", 14, 10);
+              }
+              else if (motor_state == CALIBRATION_MOTEUR && elapsed > 3000) {
+                  courant_fonctionnement_morteur = moyenne_courant;
+                  if(courant_fonctionnement_morteur < 0.05f) courant_fonctionnement_morteur = 0.05f;
+                  threshold = courant_fonctionnement_morteur * 1.2f;
+                  motor_state = MOTEUR_MARCHE;
+
+                  int len = sprintf(msg, "Seuil fixé à: %.2f A\r\n", threshold);
+                  HAL_UART_Transmit(&huart2, (uint8_t*)msg, len, 50);
+              }
+              else if (motor_state == MOTEUR_MARCHE && elapsed > 20000) {
+                  Motor_Stop();
+                  HAL_UART_Transmit(&huart2, (uint8_t*)"FIN DE COURSE (TEMPS)\r\n", 23, 50);
+                  elapsed = 0;
+              }
+              else if (motor_state == MOTEUR_MARCHE) {
+                  if (moyenne_courant > threshold) {
+                      compteur_securite++;
+                      if (compteur_securite >= 5) {
+                          Motor_Stop();
+                          HAL_UART_Transmit(&huart2, (uint8_t*)"!!! BLOCAGE DETECTE - ARRET !!!\r\n", 33, 100);
+                          elapsed = 0;
+                      }
+                  } else {
+                      compteur_securite = 0;
+                  }
+              }
+
+              // Envoie Liaison série (Tes commentaires et ta trame exacte)
+              int len = sprintf(msg, "I:%.3fA \r\n|threshold:%.3fA| courant_fonctionnement:%.3fA \r\n|counter :%d |Stat:%d TIMER:%lu ms\r\n",
+                                  moyenne_courant,
+                                  threshold,
+                                  courant_fonctionnement_morteur,
+                                  compteur_securite,
+                                  (int)motor_state,
+                                  elapsed);
+
+              HAL_UART_Transmit(&huart2, (uint8_t*)msg, len, 50);
+          }
+      }
+      // 3. MODE VEILLE (SI MOTEUR OFF)
+      else
+      {
+          // Petit message pour confirmer l'entrée en veille dans Hercules
+          HAL_UART_Transmit(&huart2, (uint8_t*)"Moteur OFF - Sleep Mode...\r\n", 28, 50);
 
 
-	 	   // MISE À JOUR DU TIMER
-	 	   if (motor_state != MOTEUR_OFF)
-	 	   {
-	 	       elapsed = current_time - motor_start_time;
-	 	   }
+          // 1. On vide le registre de réception au cas où un résidu traîne
+          __HAL_UART_FLUSH_DRREGISTER(&huart2);
 
-	 	    // --- MACHINE A ETATS DE SECURITE ---
-	 	    if (motor_state == DEMARRAGE_MOTEUR && elapsed > 2000) {
-	 	        // Après 2s, on commence à calibrer
-	 	        motor_state = CALIBRATION_MOTEUR;
-	 	        HAL_UART_Transmit(&huart2, (uint8_t*)"Calibrage...\r\n", 14, 10);
-	 	    }
-	 	    else if (motor_state == CALIBRATION_MOTEUR && elapsed > 3000) {
-	 	        // Après 1s de calibration (total 3s), on fixe le seuil
-	 	    	courant_fonctionnement_morteur = moyenne_courant;
-	 	        if(courant_fonctionnement_morteur < 0.05f) courant_fonctionnement_morteur = 0.05f; // Minimum
-	 	       threshold = courant_fonctionnement_morteur *1.2f; // multiplicateur pour laisser une marge au threshold par rapport au normal_running_current
-	 	        motor_state = MOTEUR_MARCHE;
+          // 2. On nettoie TOUS les drapeaux d'erreurs (Overrun, Noise, etc.)
+           __HAL_UART_CLEAR_FLAG(&huart2, UART_CLEAR_OREF | UART_CLEAR_NEF | UART_CLEAR_FEF);
 
-	 	        int len = sprintf(msg, "Seuil fixé à: %.2f A\r\n", threshold);
-	 	        HAL_UART_Transmit(&huart2, (uint8_t*)msg, len, 50);
-	 	    }
-	 	   else if (motor_state == MOTEUR_MARCHE && elapsed > 20000) {
-	 		  Motor_Stop();
-	 		  HAL_UART_Transmit(&huart2, (uint8_t*)"FIN DE COURSE (TEMPS)\r\n", 23, 50);
-	 		  elapsed = 0; // remet timer à 0
+           // 3. On s'assure que l'interruption RX est bien armée
+           __HAL_UART_ENABLE_IT(&huart2, UART_IT_RXNE);
 
-	 	   	   }
-	 	    else if (motor_state == MOTEUR_MARCHE) {
-	 	        // SURVEILLANCE ACTIVE
-	 	        if (moyenne_courant > threshold) {
-	 	        	compteur_securite++;
-	 	            if (compteur_securite >= 5) {
-	 	                Motor_Stop();
-	 	                HAL_UART_Transmit(&huart2, (uint8_t*)"!!! BLOCAGE DETECTE - ARRET !!!\r\n", 33, 100);
-	 	 	 		    elapsed = 0; // remet timer à 0
+          /* Le processeur s'arrête ici.
+             Il se réveillera à la moindre interruption (ex: réception UART).
+          */
+          HAL_SuspendTick(); // On suspend le Systick pour éviter un réveil toutes les 1ms
+          HAL_PWR_EnterSLEEPMode(PWR_MAINREGULATOR_ON, PWR_SLEEPENTRY_WFI);
 
-	 	            }
-	 	        } else {
-	 	        	compteur_securite = 0; // Reset si le courant redescend
-	 	        }
-	 	    }
+          /* --- LE CODE REPREND ICI AU REVEIL --- */
 
-	 	    // Envoie Liaison série
-	 	   int len = sprintf(msg, "I:%.3fA \r\n|threshold:%.3fA| courant_fonctionnement:%.3fA \r\n|counter :%d |Stat:%d TIMER:%lu ms\r\n",
-	 			   	   	     moyenne_courant,
-							 threshold,
-							 courant_fonctionnement_morteur,
-							 compteur_securite,
-	 	                     (int)motor_state,
-							 elapsed);
-
-	 	   HAL_UART_Transmit(&huart2, (uint8_t*)msg, len, 50);
-	 	}
+          HAL_ResumeTick();
+          // Optionnel : un petit message au réveil
+          // HAL_UART_Transmit(&huart2, (uint8_t*)"Wake!\r\n", 7, 10);
+          HAL_Delay(10);
+      }
+  }
 
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
- }
+
   /* USER CODE END 3 */
 }
 

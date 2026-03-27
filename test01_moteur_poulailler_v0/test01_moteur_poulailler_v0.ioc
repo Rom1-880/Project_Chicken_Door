@@ -75,6 +75,7 @@ NVIC.PendSV_IRQn=true\:0\:0\:false\:false\:true\:false\:false\:false
 NVIC.PriorityGroup=NVIC_PRIORITYGROUP_2
 NVIC.SVCall_IRQn=true\:0\:0\:false\:false\:true\:false\:false\:false
 NVIC.SysTick_IRQn=true\:3\:0\:false\:false\:true\:false\:true\:false
+NVIC.USART2_LPUART2_IRQn=true\:0\:0\:false\:false\:true\:true\:true\:true
 PA11\ [PA9].Locked=true
 PA11\ [PA9].Signal=S_TIM1_CH4
 PA13\ (SWDIO).GPIOParameters=GPIO_Label
