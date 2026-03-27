@@ -47,6 +47,8 @@ UART_HandleTypeDef huart2;
 uint8_t rx_byte[1];       // La boîte pour recevoir 1 seule lettre à la fois
 char rx_buffer[20];       // Le carnet (buffer) pour écrire le mot en entier (max 20 lettres)
 uint8_t rx_index = 0;     // Le stylo (l'index) qui retient à quelle case on est rendu
+// NOUVELLE VARIABLE : Chronomètre du dernier ordre
+uint32_t temps_dernier_ordre = 0;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -108,8 +110,24 @@ int main(void)
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
-	  // Le processeur ne fait RIEN ici pour l'instant.
-	  // Il attend sagement qu'une interruption UART "sonne" !
+	  // 1. On calcule combien de temps s'est écoulé depuis le dernier ordre
+	        uint32_t temps_actuel = HAL_GetTick();
+	        uint32_t temps_ecoule = temps_actuel - temps_dernier_ordre;
+
+	        // 2. Si ça fait plus de 10 000 ms (10 secondes)
+	        if (temps_ecoule > 10000)
+	        {
+	            // On prépare un message pour avertir le PC
+	            uint8_t msg_veille[] = "Zzz... 10s d'inactivite, je passe en VEILLE !\r\n";
+	            HAL_UART_Transmit(&huart2, msg_veille, sizeof(msg_veille)-1, 10);
+
+	            // NOTE POUR PLUS TARD : C'est ici que tu mettras la VRAIE fonction
+	            // pour couper l'alimentation de l'écran TFT et endormir le STM32.
+
+	            // Pour éviter que le message s'affiche en boucle toutes les millisecondes,
+	            // on triche un peu pour le test : on remet le chrono à zéro.
+	            temps_dernier_ordre = HAL_GetTick();
+	        }
   }
   /* USER CODE END 3 */
 }
@@ -229,6 +247,10 @@ void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
         {
             // OUI ! C'est la fin du mot. On ferme le mot proprement avec '\0' (règle du langage C)
             rx_buffer[rx_index] = '\0';
+
+            // ---> AJOUT : On met à jour le chronomètre car on a reçu un ordre validé !
+            temps_dernier_ordre = HAL_GetTick();
+            // <---
 
             // 2. On compare le mot avec "ON" (strcmp renvoie 0 si les mots sont identiques)
             if (strcmp(rx_buffer, "ON") == 0)
