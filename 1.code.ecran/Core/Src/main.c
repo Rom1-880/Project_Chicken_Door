@@ -226,7 +226,7 @@ void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
     // On vérifie que c'est bien l'UART2 qui a sonné (au cas où on en aurait plusieurs)
     if (huart->Instance == USART2)
     {
-        // 1. ACTION : On regarde ce qu'il y a dans la boîte aux lettres
+        // 1. ACTION : On regarde ce qu'il y a dans la boîte aux lettres jsp test
         if (caractere_recu[0] == 'A')
         {
             // Si on a tapé 'ON' (majuscule) sur Hercules
