@@ -261,40 +261,49 @@ void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
     {
         // 1. Est-ce que la lettre qu'on vient de recevoir est un "Retour à la ligne" ?
         // (Sur Hercules, quand tu envoies un mot, ça ajoute souvent \r ou \n à la fin)
-        if (rx_byte[0] == '\r' || rx_byte[0] == '\n')
-        {
-            // OUI ! C'est la fin du mot. On ferme le mot proprement avec '\0' (règle du langage C)
-            rx_buffer[rx_index] = '\0';
+    	if (rx_byte[0] == '\r' || rx_byte[0] == '\n')
+    	        {
+    		// C'est la fin du mot. On ferme le mot proprement avec '\0'
+    		rx_buffer[rx_index] = '\0';
 
-            // ---> AJOUT : On met à jour le chronomètre car on a reçu un ordre validé !
-            temps_dernier_ordre = HAL_GetTick();
-            // <---
+    	    // ---> IMPORTANT : On remet à zéro le chrono de veille et on rallume l'écran (LED)
+    		temps_dernier_ordre = HAL_GetTick();
+    		HAL_GPIO_WritePin(GPIOA, GPIO_PIN_5, GPIO_PIN_SET);
+    		// <---
 
-            // ---> NOUVEAU : On rallume l'écran car on a de l'activité !
-            HAL_GPIO_WritePin(GPIOA, GPIO_PIN_5, GPIO_PIN_SET);
+    		// ==========================================
+    		// NOUVELLE GESTION DES 4 TOUCHES (MENU, UP, DOWN, OK)
+    		// ==========================================
+    		if (strcmp(rx_buffer, "MENU") == 0)
+    			{
+    			uint8_t msg_menu[] = "--> Action : Affichage MENU PRINCIPAL\r\n";
+    			HAL_UART_Transmit(&huart2, msg_menu, sizeof(msg_menu)-1, 10);
+    			}
+    		else if (strcmp(rx_buffer, "UP") == 0)
+    	        {
+    			uint8_t msg_up[] = "--> Action : Navigation HAUT\r\n";
+    	        HAL_UART_Transmit(&huart2, msg_up, sizeof(msg_up)-1, 10);
+    	        }
+    	            else if (strcmp(rx_buffer, "DOWN") == 0)
+    	            {
+    	                uint8_t msg_down[] = "--> Action : Navigation BAS\r\n";
+    	                HAL_UART_Transmit(&huart2, msg_down, sizeof(msg_down)-1, 10);
+    	            }
+    	            else if (strcmp(rx_buffer, "OK") == 0)
+    	            {
+    	                uint8_t msg_ok[] = "--> Action : VALIDATION (OK)\r\n";
+    	                HAL_UART_Transmit(&huart2, msg_ok, sizeof(msg_ok)-1, 10);
+    	            }
+    	            // Si on a tapé un mot inconnu (et que ce n'est pas juste un mot vide)
+    	            else if (rx_index > 0)
+    	            {
+    	                uint8_t msg_err[] = "--> Erreur : Touche non reconnue...\r\n";
+    	                HAL_UART_Transmit(&huart2, msg_err, sizeof(msg_err)-1, 10);
+    	            }
+    	            // ==========================================
 
-            // 2. On compare le mot avec "ON" (strcmp renvoie 0 si les mots sont identiques)
-            if (strcmp(rx_buffer, "ON") == 0)
-            {
-                uint8_t msg1[] = "--> J'ai compris : ALLUMAGE\r\n";
-                HAL_UART_Transmit(&huart2, msg1, sizeof(msg1)-1, 10);
-            }
-            // 3. Sinon, on compare avec "OFF"
-            else if (strcmp(rx_buffer, "OFF") == 0)
-            {
-                uint8_t msg2[] = "--> J'ai compris : EXTINCTION\r\n";
-                HAL_UART_Transmit(&huart2, msg2, sizeof(msg2)-1, 10);
-            }
-            // 4. Optionnel : si on a tapé un mot qu'il ne connait pas
-            else if (rx_index > 0) // Si le mot n'est pas vide
-            {
-                uint8_t msg3[] = "--> Commande inconnue...\r\n";
-                HAL_UART_Transmit(&huart2, msg3, sizeof(msg3)-1, 10);
-            }
-
-            // 5. TRES IMPORTANT : On a fini de lire, on remet le "stylo" à zéro
-            // pour écrire le prochain mot au début du carnet !
-            rx_index = 0;
+    	            // On a fini de lire, on remet le "stylo" à zéro
+    	            rx_index = 0;
         }
         else
         {
