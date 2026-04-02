@@ -361,7 +361,7 @@ int main(void)
 
           HAL_ResumeTick();
           // Optionnel : un petit message au réveil
-          // HAL_UART_Transmit(&huart2, (uint8_t*)"Wake!\r\n", 7, 10);
+          HAL_UART_Transmit(&huart2, (uint8_t*)"Assalam aleykoum wa rahmatoullah wa barakatouh !\r\n", 50, 10);
           HAL_Delay(10);
       }
   }
