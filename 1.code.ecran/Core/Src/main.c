@@ -271,9 +271,9 @@ void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
     		HAL_GPIO_WritePin(GPIOA, GPIO_PIN_5, GPIO_PIN_SET);
     		// <---
 
-    		// ==========================================
-    		// NOUVELLE GESTION DES 4 TOUCHES (MENU, UP, DOWN, OK)
-    		// ==========================================
+    		// ====================================================//
+    		// NOUVELLE GESTION DES 4 TOUCHES (MENU, UP, DOWN, OK) //
+    		// ====================================================//
     		if (strcmp(rx_buffer, "MENU") == 0)
     			{
     			uint8_t msg_menu[] = "--> Action : Affichage MENU PRINCIPAL\r\n";
