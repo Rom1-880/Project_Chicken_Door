@@ -44,12 +44,16 @@
 /* Private variables ---------------------------------------------------------*/
 
 ADC_HandleTypeDef hadc1;
+DMA_HandleTypeDef hdma_adc1;
 
 DAC_HandleTypeDef hdac1;
 
 UART_HandleTypeDef huart2;
 
 /* USER CODE BEGIN PV */
+
+uint32_t adc_buffer[2]; //[0] = IN5 (Rank1, LDR),  [1] = IN4 (Rank2, batterie)
+
 
    //==================================================================//
   //                INITIALISATION PARTIE LUMINOSITÉ                  //
@@ -95,8 +99,9 @@ const float V_MIN = 4.0f; // 0%
 /* Private function prototypes -----------------------------------------------*/
 void SystemClock_Config(void);
 static void MX_GPIO_Init(void);
-static void MX_ADC1_Init(void);
+static void MX_DMA_Init(void);
 static void MX_USART2_UART_Init(void);
+static void MX_ADC1_Init(void);
 static void MX_DAC1_Init(void);
 /* USER CODE BEGIN PFP */
 
@@ -136,13 +141,17 @@ int main(void)
 
   /* Initialize all configured peripherals */
   MX_GPIO_Init();
-  MX_ADC1_Init();
+  MX_DMA_Init();
   MX_USART2_UART_Init();
+  MX_ADC1_Init();
   MX_DAC1_Init();
   /* USER CODE BEGIN 2 */
   HAL_ADCEx_Calibration_Start(&hadc1);
   HAL_GPIO_WritePin(GPIOA, GPIO_PIN_4, GPIO_PIN_SET); // Alimente le pont diviseur
   HAL_Delay(10);
+
+  HAL_ADC_Start_DMA(&hadc1, (uint32_t*)adc_buffer, 2); // Lance l'acquisition DMA en continu
+
   /* USER CODE END 2 */
 
   /* Initialize USER push-button, will be used to trigger an interrupt each time it's pressed.*/
@@ -158,19 +167,24 @@ int main(void)
 	//==================================================================//
 
       // Lecture de la tension sur PA5 (LDR_INFO) // mesurer luminosité
-      HAL_ADC_Start(&hadc1);
-      if (HAL_ADC_PollForConversion(&hadc1, 10) == HAL_OK)
+     /** HAL_ADC_Start(&hadc1);
+      if (HAL_ADC_PollForConversion(&hadc1, 100) == HAL_OK)
       {
           adc_value = HAL_ADC_GetValue(&hadc1);
       }
 
       // Lecture de la tension sur PA0 // Estimation de batterie (PILE)
-      if (HAL_ADC_PollForConversion(&hadc1, 10) == HAL_OK)
+      if (HAL_ADC_PollForConversion(&hadc1, 100) == HAL_OK)
            {
                adc_bat_value = HAL_ADC_GetValue(&hadc1);
            }
 
       HAL_ADC_Stop(&hadc1);
+      */
+
+	  // Lecture DMA : les valeurs sont mises à jour automatiquement en fond de tâche
+	  adc_value     = adc_buffer[0];   // IN5 (PA5) — LDR luminosité
+	  adc_bat_value = adc_buffer[1];   // IN4 (PA4) — pont diviseur batterie
 
       //==================================================================//
      //                          PARTIE LUMINOSITÉ                       //
@@ -208,10 +222,11 @@ int main(void)
         //==================================================================//
 
 //Tension sur la PIN PA0 (entre 0 et 3.3V car elle ne prend que 3.3V)
-          v_bat_measurer = ((float)adc_bat_value) / 4095.0;
+          v_bat_measurer = ((float)adc_bat_value) * VCC / 4095.0;
 
 // Tension Réel des piles (Application du Coef)
-          v_bat_reel = v_bat_measurer * PDP_Bat_Coef;
+          //v_bat_reel = v_bat_measurer * PDP_Bat_Coef;
+          v_bat_reel = v_bat_measurer ;
 
       //Calcul du pourcentage (Produit en croix entre V_MIN et V_MAX)
       if (v_bat_reel > V_MIN){
@@ -243,9 +258,9 @@ int main(void)
 
 
           //Affichage Batterie Restante
-          int len2 = sprintf(msg, "LDR ADC:%lu | Bat:%d.%02dV (%d%%)\r\n",
-                                adc_value, v_entier, v_dec, bat_pourcentage);
-              HAL_UART_Transmit(&huart2, (uint8_t*)msg, len, 100);
+          int len2 = sprintf(msg, "ENERGIE    : %d%% (%d.%02dV)\r\n\r\n",
+                                bat_pourcentage,  v_entier, v_dec);
+              HAL_UART_Transmit(&huart2, (uint8_t*)msg, len2, 100);
 
               HAL_Delay(500); // On attend 0.5 secondes entre chaque mesure
       // 5. COMMANDE DE LA LED (Seuil : 50 Lux)
@@ -332,12 +347,11 @@ static void MX_ADC1_Init(void)
   hadc1.Init.EOCSelection = ADC_EOC_SINGLE_CONV;
   hadc1.Init.LowPowerAutoWait = DISABLE;
   hadc1.Init.LowPowerAutoPowerOff = DISABLE;
-  hadc1.Init.ContinuousConvMode = DISABLE;
+  hadc1.Init.ContinuousConvMode = ENABLE;
   hadc1.Init.NbrOfConversion = 2;
-  hadc1.Init.DiscontinuousConvMode = DISABLE;
   hadc1.Init.ExternalTrigConv = ADC_SOFTWARE_START;
   hadc1.Init.ExternalTrigConvEdge = ADC_EXTERNALTRIGCONVEDGE_NONE;
-  hadc1.Init.DMAContinuousRequests = DISABLE;
+  hadc1.Init.DMAContinuousRequests = ENABLE;
   hadc1.Init.Overrun = ADC_OVR_DATA_PRESERVED;
   hadc1.Init.SamplingTimeCommon1 = ADC_SAMPLETIME_160CYCLES_5;
   hadc1.Init.SamplingTimeCommon2 = ADC_SAMPLETIME_1CYCLE_5;
@@ -367,7 +381,7 @@ static void MX_ADC1_Init(void)
     Error_Handler();
   }
   /* USER CODE BEGIN ADC1_Init 2 */
-  // Correction : PA5 = ADC_CHANNEL_5 (pas CHANNEL_9)
+
 
   /* USER CODE END ADC1_Init 2 */
 
@@ -461,6 +475,22 @@ static void MX_USART2_UART_Init(void)
   /* USER CODE BEGIN USART2_Init 2 */
 
   /* USER CODE END USART2_Init 2 */
+
+}
+
+/**
+  * Enable DMA controller clock
+  */
+static void MX_DMA_Init(void)
+{
+
+  /* DMA controller clock enable */
+  __HAL_RCC_DMA1_CLK_ENABLE();
+
+  /* DMA interrupt init */
+  /* DMA1_Channel1_IRQn interrupt configuration */
+  HAL_NVIC_SetPriority(DMA1_Channel1_IRQn, 0, 0);
+  HAL_NVIC_EnableIRQ(DMA1_Channel1_IRQn);
 
 }
 
