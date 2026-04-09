@@ -277,7 +277,7 @@ int main(void)
                   adc_bat_value, v_entier, v_dec, bat_pourcentage);
               HAL_UART_Transmit(&huart2, (uint8_t*)msg, len2, 100);
 
-              HAL_Delay(500); // On attend 0.5 secondes entre chaque mesure
+              HAL_Delay(500); // On attend 0.5 secondes entre chaque mesures
 
           int len3 = sprintf(msg, "BRUT_LDR: %lu | BRUT_BAT: %lu\r\n", adc_value, adc_bat_value);
               HAL_UART_Transmit(&huart2, (uint8_t*)msg, len3, 100);
@@ -579,7 +579,6 @@ void Error_Handler(void)
 
   /* USER CODE END Error_Handler_Debug */
 }
-
 
 #ifdef  USE_FULL_ASSERT
 /**
