@@ -114,7 +114,7 @@ int main(void)
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
-	  // 1. On calcule combien de temps s'est écoulé depuis le dernier ordre
+	  // 1. On calcule combien de temps s'est écoulé depuis le  dernier ordre
 	        uint32_t temps_actuel = HAL_GetTick();
 	        uint32_t temps_ecoule = temps_actuel - temps_dernier_ordre;
 
