@@ -34,6 +34,9 @@
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
 
+	//  Partie Energie  //
+#define OFFSET_BAT -0.10f //retire 0,10V à la valeur finale
+
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -236,6 +239,9 @@ int main(void)
 // Tension Réel des piles (Application du Coef)
           //v_bat_reel = v_bat_measurer * PDP_Bat_Coef;
           v_bat_reel = v_bat_measurer * PDP_Bat_Coef ;
+
+          // Ajout de l'Offset pour corriger la mesure
+          v_bat_reel = v_bat_reel + OFFSET_BAT;
 
       //Calcul du pourcentage (Produit en croix entre V_MIN et V_MAX)
       if (v_bat_reel > V_MIN){
