@@ -34,8 +34,21 @@
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
 
-	//  Partie Energie  //
-#define OFFSET_BAT -0.10f //retire 0,10V à la valeur finale
+  //==================================================================//
+ //                DEFINITION PARTIE ÉNERGIE PILE                    //
+//==================================================================//
+
+
+// Définition des seuils basés sur la datasheet Energizer (4 piles en série)
+#define V_100_Pourcent 6.0f //1.5V x 4
+#define V_75_Pourcent   5.2f  // 1.3V x 4
+#define V_50_Pourcent   4.8f  // 1.2V x 4
+#define V_20_Pourcent   4.4f  // 1.1V x 4 (Point de rupture)
+#define V_0_Pourcent    4.0f  // 1.0V x 4 (Seuil critique)
+
+// Reglage de l'OFFSET pour la batterie
+#define OFFSET_BAT 0.00f //retire 0,10V à la valeur finale
+
 
 /* USER CODE END PD */
 
@@ -96,8 +109,10 @@ const float R11 = 330000.0f; //res 330k Ohm
 const float PDP_Bat_Coef= (R11+R10)/ R11;
 
 // Seuil des Piles (6V)
-const float V_MAX = 6.0f; // 100%
+const float V_MAX = 6.0f; // 100% //précédement mis à 6V
 const float V_MIN = 4.0f; // 0%
+
+
 
 /* USER CODE END PV */
 
@@ -109,6 +124,7 @@ static void MX_USART2_UART_Init(void);
 static void MX_ADC1_Init(void);
 static void MX_DAC1_Init(void);
 /* USER CODE BEGIN PFP */
+uint8_t estimer_pourcentage_batterie(float v_bat_reel); // car besoin d'un prototype pour le pourcentage
 
 /* USER CODE END PFP */
 
@@ -243,12 +259,15 @@ int main(void)
           // Ajout de l'Offset pour corriger la mesure
           v_bat_reel = v_bat_reel + OFFSET_BAT;
 
-      //Calcul du pourcentage (Produit en croix entre V_MIN et V_MAX)
-      if (v_bat_reel > V_MIN){
+      //Calcul du pourcentage (Produit en croix entre V_MIN et V_MAX) -- Calcul linéaire -- pas bon car les piles n'ont pas une courbe linéaire
+     /** if (v_bat_reel > V_MIN){
     	  bat_pourcentage = (int)(((v_bat_reel - V_MIN)/(V_MAX - V_MIN))*100.0f);
       } else {
     	  bat_pourcentage = 0;
       }
+*/
+      // --- Calcul du pourcentage de l'Energie via la table de correspondance (table de correspondance) ---
+      uint8_t mon_pourcentage = estimer_pourcentage_batterie(v_bat_reel);
 
       // Sécurité pour ne pas afficher 102% ou -2%
           if (bat_pourcentage > 100) bat_pourcentage = 100;
@@ -274,7 +293,8 @@ int main(void)
 
           //Affichage Batterie Restante
           int len2 = sprintf(msg, "BAT: %4lu | Tension: %d.%02dV | Energie: %d%%\r\n\r\n",
-                  adc_bat_value, v_entier, v_dec, bat_pourcentage);
+                  //adc_bat_value, v_entier, v_dec, bat_pourcentage); // ancienne partie de code
+        		  adc_bat_value, v_entier, v_dec, mon_pourcentage);
               HAL_UART_Transmit(&huart2, (uint8_t*)msg, len2, 100);
 
               HAL_Delay(500); // On attend 0.5 secondes entre chaque mesures
@@ -561,6 +581,37 @@ void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef* hadc)
     {
         adc_ready = 1;   // lève le flag → le while(1) va traiter les données
     }
+}
+
+	  //==================================================================//
+	 //               PARTIE ÉNERGIE PILE - Fonction                     //
+	//==================================================================//
+
+// Estimation pourcentage batterie grace à la table de correspondance
+uint8_t estimer_pourcentage_batterie(float v_bat_reel) {
+    uint8_t pourcentage;
+
+    // Application de la table de correspondance (Look-up Table)
+    if (v_bat_reel >= V_100_Pourcent) {
+        pourcentage = 100;
+    }
+    else if (v_bat_reel >= V_75_Pourcent) {
+        pourcentage = 75; // Zone de plateau stable
+    }
+    else if (v_bat_reel >= V_50_Pourcent) {
+        pourcentage = 50; // Milieu de décharge
+    }
+    else if (v_bat_reel >= V_20_Pourcent) {
+        pourcentage = 20; // Entrée dans le coude de fin de vie
+    }
+    else if (v_bat_reel >= V_0_Pourcent) {
+        pourcentage = 5;  // Alerte critique avant coupure
+    }
+    else {
+        pourcentage = 0;  // Pile vide selon les standards industriels
+    }
+
+    return pourcentage;
 }
 /* USER CODE END 4 */
 
