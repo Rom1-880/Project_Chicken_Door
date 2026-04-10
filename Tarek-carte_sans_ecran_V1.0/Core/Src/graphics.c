@@ -9,7 +9,8 @@
 #include "graphics.h"
 #include "fonts.h"
 
-#include "bibliotheque.h"
+//X #include "bibliotheque.h"
+#include "lcd.h"
 
 extern void setArea(uint8_t xStart, uint8_t yStart, uint8_t xEnd, uint8_t yEnd);
 extern void writeData(uint8_t data);
