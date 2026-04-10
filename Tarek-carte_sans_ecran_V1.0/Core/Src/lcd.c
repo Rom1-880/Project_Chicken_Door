@@ -14,6 +14,7 @@
 #include "config.h"
 */
 // #include "bibliotheque.h"
+#include "lcd.h"
 #include "main.h" /*------------------Inclut les définitions HAL du STM32------------------*/
 /* -----------------------------------ANCIEN CODE MSP430-----------------------------------*/
 /*void initialise_LCD(void)
@@ -33,6 +34,9 @@
 /*-------------------------------------Le Pont "writeCommand" et "writeData" (avec noms choisis) : */
 
 extern SPI_HandleTypeDef hspi1; // Assure-toi que c'est hspi1 ou hspi2 selon ta configuration
+
+/*-----------On force l'activation du code pour le ST7735 ---------------------------------*/
+#define ST7735
 
 void writeCommand(uint8_t cmd) {
     // 1. Broche A0 (Data/Command) à l'état BAS (0) pour une commande
