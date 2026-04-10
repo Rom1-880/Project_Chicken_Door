@@ -14,11 +14,12 @@
 #include "config.h"
 */
 #include "bibliotheque.h"
-
-void initialise_LCD(void)
+#include "main.h" // Inclut les définitions HAL du STM32
+// ANCIEN CODE MSP430
+/*void initialise_LCD(void)
 {
     P1DIR    = P1DIR|BIT5;  // Reset de l'afficheur sur P1.5 mis en sortie
-    P1OUT = P1OUT|BIT5;     // Reset afficheur mis � 1 (pas de reset)
+    P1OUT = P1OUT|BIT5;     // Reset afficheur mis � 1 (pas de reset)
 
     P4DIR = P4DIR|BIT2;     // Alimentation de l'afficheur sur P4.2 mis en sortie
     P4OUT = P4OUT&~BIT2;    // alimentation de l'afficheur en mettant 0V sur la broche de commande
@@ -27,7 +28,20 @@ void initialise_LCD(void)
     _delay_cycles(160000);  // wait
     initLCD();
     clearScreen(1);
+}*/
+void initialise_LCD(void)
+{
+    // 1. Reset matériel de l'écran (On met la broche RESET à 0, on attend, on la remet à 1)
+    HAL_GPIO_WritePin(LCD_RST_GPIO_Port, LCD_RST_Pin, GPIO_PIN_RESET);
+    HAL_Delay(10); // L'équivalent STM32 de _delay_cycles
+    HAL_GPIO_WritePin(LCD_RST_GPIO_Port, LCD_RST_Pin, GPIO_PIN_SET);
+    HAL_Delay(50); // On laisse l'écran démarrer
+
+    // 2. Initialisation des registres de l'écran (ILI9225, ST7735, etc.)
+    initLCD();
+    clearScreen(1);
 }
+
 
 u_char _orientation = 0;
 
