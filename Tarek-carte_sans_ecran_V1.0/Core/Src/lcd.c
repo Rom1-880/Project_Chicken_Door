@@ -13,9 +13,9 @@
 #include "msp.h"
 #include "config.h"
 */
-#include "bibliotheque.h"
-#include "main.h" // Inclut les définitions HAL du STM32
-// ANCIEN CODE MSP430
+// #include "bibliotheque.h"
+#include "main.h" /*------------------Inclut les définitions HAL du STM32------------------*/
+/* -----------------------------------ANCIEN CODE MSP430-----------------------------------*/
 /*void initialise_LCD(void)
 {
     P1DIR    = P1DIR|BIT5;  // Reset de l'afficheur sur P1.5 mis en sortie
@@ -29,12 +29,46 @@
     initLCD();
     clearScreen(1);
 }*/
+
+/*-------------------------------------Le Pont "writeCommand" et "writeData" (avec noms choisis) : */
+
+extern SPI_HandleTypeDef hspi1; // Assure-toi que c'est hspi1 ou hspi2 selon ta configuration
+
+void writeCommand(uint8_t cmd) {
+    // 1. Broche A0 (Data/Command) à l'état BAS (0) pour une commande
+    HAL_GPIO_WritePin(A0_GPIO_Port, A0_Pin, GPIO_PIN_RESET);
+
+    // 2. Activer l'écran : Broche CS (Chip Select) à l'état BAS (0)
+    HAL_GPIO_WritePin(CS_GPIO_Port, CS_Pin, GPIO_PIN_RESET);
+
+    // 3. Envoyer l'octet
+    HAL_SPI_Transmit(&hspi1, &cmd, 1, HAL_MAX_DELAY);
+
+    // 4. Désactiver l'écran : CS à l'état HAUT (1)
+    HAL_GPIO_WritePin(CS_GPIO_Port, CS_Pin, GPIO_PIN_SET);
+}
+
+void writeData(uint8_t data) {
+    // 1. Broche A0 à l'état HAUT (1) pour de la donnée
+    HAL_GPIO_WritePin(A0_GPIO_Port, A0_Pin, GPIO_PIN_SET);
+
+    // 2. Activer l'écran : CS à 0
+    HAL_GPIO_WritePin(CS_GPIO_Port, CS_Pin, GPIO_PIN_RESET);
+
+    // 3. Envoyer l'octet
+    HAL_SPI_Transmit(&hspi1, &data, 1, HAL_MAX_DELAY);
+
+    // 4. Désactiver l'écran : CS à 1
+    HAL_GPIO_WritePin(CS_GPIO_Port, CS_Pin, GPIO_PIN_SET);
+}
+
+/*-----------------------------------NOUVEAU CODE STM32-------------------------------------*/
 void initialise_LCD(void)
 {
     // 1. Reset matériel de l'écran (On met la broche RESET à 0, on attend, on la remet à 1)
-    HAL_GPIO_WritePin(LCD_RST_GPIO_Port, LCD_RST_Pin, GPIO_PIN_RESET);
+    HAL_GPIO_WritePin(RST_GPIO_Port, RST_Pin, GPIO_PIN_RESET);
     HAL_Delay(10); // L'équivalent STM32 de _delay_cycles
-    HAL_GPIO_WritePin(LCD_RST_GPIO_Port, LCD_RST_Pin, GPIO_PIN_SET);
+    HAL_GPIO_WritePin(RST_GPIO_Port, RST_Pin, GPIO_PIN_SET);
     HAL_Delay(50); // On laisse l'écran démarrer
 
     // 2. Initialisation des registres de l'écran (ILI9225, ST7735, etc.)
@@ -162,9 +196,9 @@ void gammaAdjustmentST7735() {
 void initLCD() {
 
 	writeCommand(SWRESET);
-	delay(20);
+	HAL_Delay(20);
 	writeCommand(SLEEPOUT);
-	delay(20); // driver is doing self check, but seems to be working fine without the delay
+	HAL_Delay(20); // driver is doing self check, but seems to be working fine without the delay
 	writeCommand(COLMOD);
 	writeData(0x05);// 16-bit mode
 	writeCommand(MADCTL);
@@ -228,7 +262,7 @@ void gammaAdjustmentHX8340() {
 }
 
 void initLCD() {
-	delay(20);
+	HAL_Delay(20);
 	writeCommand(SETEXTCMD);
 	writeData(0xFF);
 	writeData(0x83);
@@ -335,7 +369,7 @@ void setGRAMILI9225() {
 void initLCD() {
 
 	writeCommand(0x28);
-	delay(20);
+	HAL_Delay(20);
 
 	setOrientation(ORIENTATION);
 
