@@ -112,6 +112,11 @@ const float PDP_Bat_Coef= (R11+R10)/ R11;
 const float V_MAX = 6.0f; // 100% //précédement mis à 6V
 const float V_MIN = 4.0f; // 0%
 
+//Lissage pour que le résultat soit stable
+float v_bat_lisse = 0.0f;
+
+//Nombre d'échantillons
+const int nb_echantillons = 50;
 
 
 /* USER CODE END PV */
@@ -125,6 +130,10 @@ static void MX_ADC1_Init(void);
 static void MX_DAC1_Init(void);
 /* USER CODE BEGIN PFP */
 uint8_t estimer_pourcentage_batterie(float v_bat_reel); // car besoin d'un prototype pour le pourcentage
+
+//Prévient que l'outil existe (Prototype)
+float lisser_tension_batterie(float nouvelle_lecture);
+
 
 /* USER CODE END PFP */
 
@@ -256,26 +265,29 @@ int main(void)
           //v_bat_reel = v_bat_measurer * PDP_Bat_Coef;
           v_bat_reel = v_bat_measurer * PDP_Bat_Coef ;
 
+          // Lissage de V_bat_reel
+          v_bat_lisse = lisser_tension_batterie(v_bat_reel); // obtention d'une valeur stable
+
           // Ajout de l'Offset pour corriger la mesure
           v_bat_reel = v_bat_reel + OFFSET_BAT;
 
       //Calcul du pourcentage (Produit en croix entre V_MIN et V_MAX) -- Calcul linéaire -- pas bon car les piles n'ont pas une courbe linéaire
-     /** if (v_bat_reel > V_MIN){
-    	  bat_pourcentage = (int)(((v_bat_reel - V_MIN)/(V_MAX - V_MIN))*100.0f);
+      if (v_bat_reel > V_MIN){
+    	  bat_pourcentage = (int)(((v_bat_lisse - V_MIN)/(V_MAX - V_MIN))*100.0f);
       } else {
     	  bat_pourcentage = 0;
       }
-*/
+
       // --- Calcul du pourcentage de l'Energie via la table de correspondance (table de correspondance) ---
-      uint8_t mon_pourcentage = estimer_pourcentage_batterie(v_bat_reel);
+      //uint8_t mon_pourcentage = estimer_pourcentage_batterie(v_bat_reel);
 
       // Sécurité pour ne pas afficher 102% ou -2%
           if (bat_pourcentage > 100) bat_pourcentage = 100;
           if (bat_pourcentage < 0)   bat_pourcentage = 0;
 
       //Décomposition pour affichage sans %f
-          int v_entier = (int)v_bat_reel;
-          int v_dec = (int)((v_bat_reel - v_entier) * 100);
+          int v_entier = (int)v_bat_lisse;
+          int v_dec = (int)((v_bat_lisse - v_entier) * 100);
 
           //==================================================================//
          //                       AFFICHAGE LIAISON SÉRIE                    //
@@ -293,8 +305,8 @@ int main(void)
 
           //Affichage Batterie Restante
           int len2 = sprintf(msg, "BAT: %4lu | Tension: %d.%02dV | Energie: %d%%\r\n\r\n",
-                  //adc_bat_value, v_entier, v_dec, bat_pourcentage); // ancienne partie de code
-        		  adc_bat_value, v_entier, v_dec, mon_pourcentage);
+                  adc_bat_value, v_entier, v_dec, bat_pourcentage); // ancienne partie de code
+        		  //adc_bat_value, v_entier, v_dec, mon_pourcentage);
               HAL_UART_Transmit(&huart2, (uint8_t*)msg, len2, 100);
 
               HAL_Delay(500); // On attend 0.5 secondes entre chaque mesures
@@ -588,6 +600,7 @@ void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef* hadc)
 	//==================================================================//
 
 // Estimation pourcentage batterie grace à la table de correspondance
+/**
 uint8_t estimer_pourcentage_batterie(float v_bat_reel) {
     uint8_t pourcentage;
 
@@ -613,6 +626,25 @@ uint8_t estimer_pourcentage_batterie(float v_bat_reel) {
 
     return pourcentage;
 }
+*/
+
+    // Calcul de la moyenne pour la tension de batterie
+    float lisser_tension_batterie(float nouvelle_lecture) {
+    	static float historique [100] = {0}; // tableau qui reste en mémoire (static) //garde les 50 dernière valeur en mémoire
+    	static int index = 0;
+    	float somme = 0;
+
+    // Ajout de la nouvelle mesure dans le tableau
+    historique[index] = nouvelle_lecture;
+    index = (index + 1) % nb_echantillons; // On boucle de 0 à 49
+
+    //Calcul de la moyenne
+    for (int i = 0; i < nb_echantillons; i++) {
+    	 somme += historique[i];
+    }
+    return somme / (float)nb_echantillons;
+ }
+
 /* USER CODE END 4 */
 
 /**
@@ -627,9 +659,9 @@ void Error_Handler(void)
   while (1)
   {
   }
-
-  /* USER CODE END Error_Handler_Debug */
 }
+  /* USER CODE END Error_Handler_Debug */
+
 
 #ifdef  USE_FULL_ASSERT
 /**
