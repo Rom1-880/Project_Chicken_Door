@@ -102,8 +102,6 @@
                     
             <Cdefines>
                                   
-              <define>STM32U031xx</define>
-                                  
               <define>USE_FULL_LL_DRIVER</define>
                                   
               <define>USE_FULL_ASSERT=1U</define>
