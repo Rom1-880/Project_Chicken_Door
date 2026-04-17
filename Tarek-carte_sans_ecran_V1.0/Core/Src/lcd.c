@@ -15,7 +15,9 @@
 */
 // #include "bibliotheque.h"
 #include "lcd.h"
-#include "main.h" /*------------------Inclut les définitions HAL du STM32------------------*/
+#include "main.h"
+
+/*------------------Inclut les définitions HAL du STM32------------------*/
 /* -----------------------------------ANCIEN CODE MSP430-----------------------------------*/
 /*void initialise_LCD(void)
 {

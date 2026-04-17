@@ -7,7 +7,10 @@
 #ifndef GRAPHICS_H_
 #define GRAPHICS_H_
 
+//#include "fonts.h"
 #include "typedefs.h"
+
+#include "lcd.h"
 //
 // font sizes
 #define FONT_SM		0
@@ -17,8 +20,12 @@
 #define FONT_MD_BKG	4
 #define FONT_LG_BKG	5
 //
-void setColor(u_int color);
-void setBackgroundColor(u_int color);
+
+//void setColor(u_int color);
+void setColor(short unsigned int color);
+
+//void setBackgroundColor(u_int color);
+void setBackgroundColor(short unsigned int color);
 //
 void clearScreen(u_char blackWhite);
 void drawPixel(u_char x, u_char y);
@@ -38,9 +45,12 @@ void fillCircle(u_char x, u_char y, u_char radius);
 //
 void drawLogicLine(u_char x, u_char y, u_char length, u_char height, u_char * data);
 //
-void drawImage(u_char x, u_char y, u_char w, u_char h, u_int * data);
-void drawImageLut(u_char x, u_char y, u_char w, u_char h, u_char * data, u_int * lut);
-void drawImageMono(u_char x, u_char y, u_char w, u_char h, u_char * data);
+void drawImage(unsigned char x, unsigned char y, unsigned char w, unsigned char h, short unsigned int * data);
+//void drawImage(u_char x, u_char y, u_char w, u_char h, u_int * data);
+void drawImageLut(unsigned char x, unsigned char y, unsigned char w, unsigned char h, unsigned char * data, short unsigned int * lut);
+//void drawImageLut(u_char x, u_char y, u_char w, u_char h, u_char * data, u_int * lut);
+void drawImageMono(unsigned char  x, unsigned char  y, unsigned char  w, unsigned char  h, unsigned char  * data);
+//void drawImageMono(u_char x, u_char y, u_char w, u_char h, u_char * data);
 //
 #endif /* GRAPHICS_H_ */
 

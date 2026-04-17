@@ -8,9 +8,11 @@
 #ifndef AFFICHAGEMENU_C_
 #define AFFICHAGEMENU_C_
 
-#include "bibliotheque.h"
+//#include "bibliotheque.h"
 
 #include <color.h>
+//#include <fonts2.tot>
+#include "graphics.h"
 //#include <time.h>
 
 //#include "pile.h"
@@ -24,7 +26,7 @@
 // les menus affichÃ©s vont dÃ©pendre de la langue choisie!!!
 
 /*
- * remplacé par une variable tm de type time_t
+ * remplacï¿½ par une variable tm de type time_t
 extern char annee;      // annee variant de 0 Ã  255 correspondant Ã  2000 Ã  2255
 extern char mois;        // mois variant de 1 Ã  12 !!! peur Ãªtre de 0 Ã  11 pour correspondre Ã  l'ephemeride!!!
 extern char jour;
@@ -32,9 +34,10 @@ extern signed char heure;     // de 0 Ã  23
 extern signed char min;         // de 0 Ã  59
 */
 
+    /* a remettre plus tard!!!!
 extern time_t temps;
 extern struct tm tm_temps;
-
+*/
 extern signed char UTC;
 extern signed char absUTC;
 
@@ -58,7 +61,7 @@ extern signed char minF;         // de 0 Ã  59
 extern char signed minretard;        // de 0 Ã  90min;
 
 extern signed char latitude;        // france   // comprise entre -90 et 90Â° !!! Pb d'hÃ©misphÃ¨re!!!
-extern int longitude;               // france   // comprise entre -180 et +180° !!!
+extern int longitude;               // france   // comprise entre -180 et +180ï¿½ !!!
 
 
 void affichecarre(char choix)
@@ -220,8 +223,10 @@ void afficheecran3(void)   // rÃ©glage annÃ©e
     if (langue==4) {drawString(15, 10, FONT_MD, "AJUSTE ANOS");}
     if (langue==5) {drawString(15, 10, FONT_MD, "ANNO SET");}
 
+    /* a remettre plus tard!!!!
     chaine[2]=(tm_temps.tm_year-30)/10+0x30;
-    chaine[3]=(tm_temps.tm_year-30)%10+0x30;;
+    chaine[3]=(tm_temps.tm_year-30)%10+0x30;
+    */
 
     setColor(COLOR_16_RED);
     drawString(45, 50, FONT_MD, chaine);
@@ -237,10 +242,10 @@ void afficheecran4(void)   // rÃ©glage mois
     if (langue==3) {drawString(15, 10, FONT_MD, "MONAT SET");}
     if (langue==4) {drawString(15, 10, FONT_MD, "AJUSTE MES");}
     if (langue==5) {drawString(15, 10, FONT_MD, "MESE SET");}
-
-    chaine[0]=(tm_temps.tm_mon+1)/10+0x30;              //  rq mon varie de 0 à 11 au lieu de 1 à 12!!!
-    chaine[1]=(tm_temps.tm_mon+1)%10+0x30;;             // chaine[01] varie de 1 à 12
-
+ /* a remettre plus tard!!!!
+    chaine[0]=(tm_temps.tm_mon+1)/10+0x30;              //  rq mon varie de 0 ï¿½ 11 au lieu de 1 ï¿½ 12!!!
+    chaine[1]=(tm_temps.tm_mon+1)%10+0x30;;             // chaine[01] varie de 1 ï¿½ 12
+*/
     setColor(COLOR_16_RED);
     drawString(45, 50, FONT_MD, chaine);
 }
@@ -255,10 +260,10 @@ void afficheecran5(void)   // rÃ©glage jour
     if (langue==3) {drawString(15, 10, FONT_MD, "TAG SET");}
     if (langue==4) {drawString(15, 10, FONT_MD, "AJUSTE DIA");}
     if (langue==5) {drawString(15, 10, FONT_MD, "GIORNO SET");}
-
+    /* a remettre plus tard!!!!
     chaine[0]=tm_temps.tm_mday/10+0x30;
     chaine[1]=tm_temps.tm_mday%10+0x30;;
-
+	*/
     setColor(COLOR_16_RED);
     drawString(45, 50, FONT_MD, chaine);
 }
@@ -273,10 +278,10 @@ void afficheecran6(void)   // rÃ©glage heure
     if (langue==3) {drawString(15, 10, FONT_MD, "ZEIT SET");}
     if (langue==4) {drawString(15, 10, FONT_MD, "AJUSTE HORA");}
     if (langue==5) {drawString(15, 10, FONT_MD, "ORA SET");}
-
+    /* a remettre plus tard!!!!
     chaine[0]=tm_temps.tm_hour/10+0x30;
     chaine[1]=tm_temps.tm_hour%10+0x30;;
-
+     */
     setColor(COLOR_16_RED);
     drawString(45, 50, FONT_MD, chaine);
 }
@@ -291,10 +296,10 @@ void afficheecran7(void)   // rÃ©glage min
     if (langue==3) {drawString(15, 10, FONT_MD, "MINUTE SET");}
     if (langue==4) {drawString(15, 10, FONT_MD, "AJUSTE MINUTO");}
     if (langue==5) {drawString(15, 10, FONT_MD, "MINUTO SET");}
-
+    /* a remettre plus tard!!!!
     chaine[0]=tm_temps.tm_min/10+0x30;
     chaine[1]=tm_temps.tm_min%10+0x30;;
-
+	*/
     setColor(COLOR_16_RED);
     drawString(45, 50, FONT_MD, chaine);
 }
@@ -305,11 +310,11 @@ void afficheecran8(void)   // Ecran principal (aprÃ¨s un appui de 5s sur le BP O
      *  Ecran de dimension foireuse!!
      */
 
-/*    char chaine[6]={0,0,':',0,0,0};           // Pb, me réinitialise les variables à chaque fois
+/*    char chaine[6]={0,0,':',0,0,0};           // Pb, me rï¿½initialise les variables ï¿½ chaque fois
     char chainep[6]={0,0,':',0,0,0};
 */
 /*
-    if ((tm_temps.tm_sec==0)&(eff==1))                     // si changement de minutes (seconde =0 et pas encore effacé)=> effacement de l'ancienne heure affichée
+    if ((tm_temps.tm_sec==0)&(eff==1))                     // si changement de minutes (seconde =0 et pas encore effacï¿½)=> effacement de l'ancienne heure affichï¿½e
         {
         setColor(COLOR_16_BLACK);
         drawString(45, 40, FONT_MD, chainep);
@@ -335,7 +340,7 @@ void afficheecran8(void)   // Ecran principal (aprÃ¨s un appui de 5s sur le BP O
     if (langue==3)
     {
     drawString(5, 10, FONT_SM, "[ ] manuell zu offnen");     // modification de font.h pour transformer '[' en 'â†“' et ']' en 'â†‘'
-    drawString(5, 20, FONT_SM, "oder zu schließen");         // en taille SM
+    drawString(5, 20, FONT_SM, "oder zu schlieï¿½en");         // en taille SM
     }
     if (langue==4)
     {
@@ -350,13 +355,13 @@ void afficheecran8(void)   // Ecran principal (aprÃ¨s un appui de 5s sur le BP O
         /*
         * affichage de l'heure
         */
-
+/*
     chaine[0]=tm_temps.tm_hour/10+0x30;
     chaine[1]=tm_temps.tm_hour%10+0x30;
     chaine[3]=tm_temps.tm_min/10+0x30;
     chaine[4]=tm_temps.tm_min%10+0x30;
 
-    if ((tm_temps.tm_sec==0)&(eff==1))                     // si changement de minutes (seconde =0 et pas encore effacé)=> effacement de l'ancienne heure affichée
+    if ((tm_temps.tm_sec==0)&(eff==1))                     // si changement de minutes (seconde =0 et pas encore effacï¿½)=> effacement de l'ancienne heure affichï¿½e
         {
         setColor(COLOR_16_BLACK);
         drawString(45, 40, FONT_MD, chainep);
@@ -366,10 +371,10 @@ void afficheecran8(void)   // Ecran principal (aprÃ¨s un appui de 5s sur le BP O
         {
         eff=1;
         }
-
+*/
     drawString(45, 40, FONT_MD, chaine);
 
-    chainep[0]=chaine[0];       // mémorisation de la dernière chaine affichée
+    chainep[0]=chaine[0];       // mï¿½morisation de la derniï¿½re chaine affichï¿½e
     chainep[1]=chaine[1];
     chainep[3]=chaine[3];
     chainep[4]=chaine[4];
@@ -379,7 +384,7 @@ void afficheecran8(void)   // Ecran principal (aprÃ¨s un appui de 5s sur le BP O
      * Inserer l'affichage de la pile Ã  cotÃ© de l'heure!
      */
 
- /*   on mesure Vpile * 68/168 (pont diviseur) soit environ 2.43V quand on met 6V en entrée.
+ /*   on mesure Vpile * 68/168 (pont diviseur) soit environ 2.43V quand on met 6V en entrï¿½e.
   *              pile pleine:    1.5 -> 1.3    seuil :         643     ->  (1.3*4*68/168)/q
   *              pile 3/4 :      1.3 -> 1.18   seuil :  644 et 594
   *              pile 1/2 :      1.18 -> 1.1   seuil :  593 et 544
@@ -388,7 +393,7 @@ void afficheecran8(void)   // Ecran principal (aprÃ¨s un appui de 5s sur le BP O
 
 
   if (tensionpile<545)                 // vrai seuils
- //   if (tensionpile<600)                 // seuil simulés par ma LDR
+ //   if (tensionpile<600)                 // seuil simulï¿½s par ma LDR
         {
          setColor(COLOR_16_RED);        // pile vide en rouge
          drawRect(10,40,30,52);
@@ -399,7 +404,7 @@ void afficheecran8(void)   // Ecran principal (aprÃ¨s un appui de 5s sur le BP O
          fillRect(24,42,28,50);
         }
    else if ((tensionpile>544)&&(tensionpile<594))                 // vrai seuils
-//   else if ((tensionpile>600)&&(tensionpile<800))                   // seuil simulés par ma LDR
+//   else if ((tensionpile>600)&&(tensionpile<800))                   // seuil simulï¿½s par ma LDR
        {
        setColor(COLOR_16_WHITE);        // pile 1 barre
        drawRect(10,40,30,52);
@@ -410,7 +415,7 @@ void afficheecran8(void)   // Ecran principal (aprÃ¨s un appui de 5s sur le BP O
        fillRect(24,42,28,50);
        }
    else if ((tensionpile>593)&&(tensionpile<644))                 // vrai seuils
-//   else if ((tensionpile>800)&&(tensionpile<1000))                   // seuil simulés par ma LDR
+//   else if ((tensionpile>800)&&(tensionpile<1000))                   // seuil simulï¿½s par ma LDR
          {
          setColor(COLOR_16_WHITE);        // pile 2 barres
          drawRect(10,40,30,52);
@@ -421,7 +426,7 @@ void afficheecran8(void)   // Ecran principal (aprÃ¨s un appui de 5s sur le BP O
          fillRect(24,42,28,50);
          }
    else if (tensionpile>643)                 // vrai seuils
-//   else if (tensionpile>1000)                   // seuil simulés par ma LDR
+//   else if (tensionpile>1000)                   // seuil simulï¿½s par ma LDR
          {
          setColor(COLOR_16_WHITE);        // pile 3 barres
          drawRect(10,40,30,52);
@@ -513,7 +518,7 @@ void afficheecran8(void)   // Ecran principal (aprÃ¨s un appui de 5s sur le BP O
 void afficheecran9(void)   // rÃ©glage GPS
 {
     char chaine[5]={0,0,0,0,0};
-    extern char choixi;                   // permet le choix de réglage entre lattitude et longitude
+    extern char choixi;                   // permet le choix de rï¿½glage entre lattitude et longitude
 
     setColor(COLOR_16_WHITE);
     if (langue==1) {drawString(15, 10, FONT_MD, "GPS LOCATION");}
@@ -935,7 +940,7 @@ void afficheecran25(void)  // rÃ©glage delai fermeture
     drawString(45, 10, FONT_MD, "UTC");
 /*
     if (langue==1) {drawString(5, 30, FONT_SM, "ex France : UTC+2 in sommer");}
-    if (langue==2) {drawString(5, 30, FONT_SM, "ex France : UTC+2 en été");}
+    if (langue==2) {drawString(5, 30, FONT_SM, "ex France : UTC+2 en ï¿½tï¿½");}
     if (langue==3) {drawString(5, 30, FONT_SM, "ex France : UTC+2 im sommer");}
     if (langue==4) {drawString(5, 30, FONT_SM, "ex France : UTC+2 en verano");}
     if (langue==5) {drawString(5, 30, FONT_SM, "ex France : UTC+2 in estate");}

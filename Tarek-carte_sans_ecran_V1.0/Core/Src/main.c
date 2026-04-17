@@ -116,6 +116,8 @@ int main(void)
   // ==========================================
   // 3. INITIALISATION ET TEST DE L'ÉCRAN
   // ==========================================
+  HAL_GPIO_WritePin(ALIM_AFF_GPIO_Port, ALIM_AFF_Pin, GPIO_PIN_RESET);
+  HAL_Delay(50);  	  	  	  	 // alimentation de l'afficheur
   initialise_LCD(); // Réveille et configure l'écran
 
   // Test d'affichage (utilise les fonctions de graphics.h)
@@ -214,7 +216,7 @@ static void MX_SPI1_Init(void)
   hspi1.Instance = SPI1;
   hspi1.Init.Mode = SPI_MODE_MASTER;
   hspi1.Init.Direction = SPI_DIRECTION_2LINES;
-  hspi1.Init.DataSize = SPI_DATASIZE_4BIT;
+  hspi1.Init.DataSize = SPI_DATASIZE_8BIT;
   hspi1.Init.CLKPolarity = SPI_POLARITY_LOW;
   hspi1.Init.CLKPhase = SPI_PHASE_1EDGE;
   hspi1.Init.NSS = SPI_NSS_SOFT;
