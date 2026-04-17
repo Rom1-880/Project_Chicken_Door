@@ -47,7 +47,7 @@
 #define V_0_Pourcent    4.0f  // 1.0V x 4 (Seuil critique)
 
 // Reglage de l'OFFSET pour la batterie
-#define OFFSET_BAT 0.00f //retire 0,10V à la valeur finale
+#define OFFSET_BAT 0.112f //retire 0,112V à la valeur finale
 
 
 /* USER CODE END PD */
@@ -116,7 +116,7 @@ const float V_MIN = 4.0f; // 0%
 float v_bat_lisse = 0.0f;
 
 //Nombre d'échantillons
-const int nb_echantillons = 50;
+const int nb_echantillons = 10;
 
 
 /* USER CODE END PV */
@@ -181,6 +181,24 @@ int main(void)
   HAL_Delay(10);
   HAL_ADC_Start_DMA(&hadc1, (uint32_t*)adc_buffer, 2); // Lance l'acquisition DMA en continu
 
+  //==================================================================//
+ //                        PARTIE ÉNERGIE PILE                       //
+//==================================================================//
+  /* // --- LE PRÉCHAUFFAGE FORCÉ ---
+    // On attend la toute première mesure réelle
+    while(adc_ready == 0);
+
+    // On récupère la valeur brute et on calcule la tension réelle
+    float v_init = (((float)(adc_buffer[1] & 0xFFFF)) * VCC / 4095.0f * PDP_Bat_Coef) + OFFSET_BAT;
+    // note : 0xFFFF correspond à 65535 (valeur max que l'on peu stocker dans un registre de 16 bits
+
+
+    // On remplit le filtre 50 fois avec cette valeur pour le "gaver" immédiatement
+    for(int i = 0; i < 50; i++) {
+        v_bat_lisse = lisser_tension_batterie(v_init);
+    }
+
+*/
   /* USER CODE END 2 */
 
   /* Initialize USER push-button, will be used to trigger an interrupt each time it's pressed.*/
@@ -263,13 +281,15 @@ int main(void)
 
 // Tension Réel des piles (Application du Coef)
           //v_bat_reel = v_bat_measurer * PDP_Bat_Coef;
-          v_bat_reel = v_bat_measurer * PDP_Bat_Coef ;
+          v_bat_reel = (v_bat_measurer * PDP_Bat_Coef) + OFFSET_BAT;
 
           // Lissage de V_bat_reel
           v_bat_lisse = lisser_tension_batterie(v_bat_reel); // obtention d'une valeur stable
 
-          // Ajout de l'Offset pour corriger la mesure
+ /*         // Ajout de l'Offset pour corriger la mesure
           v_bat_reel = v_bat_reel + OFFSET_BAT;
+ */
+          HAL_Delay(100); // 10 mesures * 100ms = 1 seconde totale pour la moyenne
 
       //Calcul du pourcentage (Produit en croix entre V_MIN et V_MAX) -- Calcul linéaire -- pas bon car les piles n'ont pas une courbe linéaire
       if (v_bat_reel > V_MIN){
@@ -300,8 +320,8 @@ int main(void)
          int len = sprintf(msg, "ADC:%4lu | V:%d.%02dV | R_ldr:%d kohm | Lux:%d.%d\r\n", adc_value, volt_entier, volt_dec, rldr_kohm, lux_entier, lux_dec);
           HAL_UART_Transmit(&huart2, (uint8_t*)msg, len, HAL_MAX_DELAY);
 
-          HAL_Delay(500); // On attend 0.5 secondes entre chaque mesure
-
+/*          HAL_Delay(500); // On attend 0.5 secondes entre chaque mesure
+*/
 
           //Affichage Batterie Restante
           int len2 = sprintf(msg, "BAT: %4lu | Tension: %d.%02dV | Energie: %d%%\r\n\r\n",
@@ -309,7 +329,7 @@ int main(void)
         		  //adc_bat_value, v_entier, v_dec, mon_pourcentage);
               HAL_UART_Transmit(&huart2, (uint8_t*)msg, len2, 100);
 
-              HAL_Delay(500); // On attend 0.5 secondes entre chaque mesures
+             HAL_Delay(1000); // On attend 0.5 secondes entre chaque mesures
 
           int len3 = sprintf(msg, "BRUT_LDR: %lu | BRUT_BAT: %lu\r\n", adc_value, adc_bat_value);
               HAL_UART_Transmit(&huart2, (uint8_t*)msg, len3, 100);
@@ -634,11 +654,23 @@ uint8_t estimer_pourcentage_batterie(float v_bat_reel) {
     	static int index = 0;
     	float somme = 0;
 
-    // Ajout de la nouvelle mesure dans le tableau
+   /* 	static int premier_passage = 1; // Flag pour le démarrage pour stabilité imédiate
+
+    //Fonctionnement pour stabilité imédiate - Ajout de la nouvelle mesure dans le tableau
+    	if (premier_passage) {
+    	        for (int i = 0; i < nb_echantillons; i++) {
+    	            historique[i] = nouvelle_lecture; // On remplit tout le tableau avec la 1ère mesure
+    	        }
+    	        premier_passage = 0;
+    	        return nouvelle_lecture;
+    	    }
+*/
+
+    // Fonctionnement Normal -- Ajout de la nouvelle mesure dans le tableau
     historique[index] = nouvelle_lecture;
     index = (index + 1) % nb_echantillons; // On boucle de 0 à 49
 
-    //Calcul de la moyenne
+    // Fonctionnement Normal -- Calcul de la moyenne
     for (int i = 0; i < nb_echantillons; i++) {
     	 somme += historique[i];
     }
@@ -659,9 +691,9 @@ void Error_Handler(void)
   while (1)
   {
   }
-}
-  /* USER CODE END Error_Handler_Debug */
 
+  /* USER CODE END Error_Handler_Debug */
+}
 
 #ifdef  USE_FULL_ASSERT
 /**
