@@ -3,6 +3,10 @@
  *
  *  Created on: 8 mai 2019
  *      Author: Joel
+ *
+ *       * Modified on: 19 Avril 2026
+ *		 Author: ALLAM Tarek
+ * 		for STM32 Portage
  */
 
 #ifndef AFFICHAGEMENU_H_
@@ -10,29 +14,29 @@
 
 void affichecarre(char choix);      // encadrement rouge
 
-void effaceligne(void);              // efface la ligne correspondant à l'année.
+void effaceligne(void);              // efface la ligne correspondant ï¿½ l'annï¿½e.
 
-void effaceligne2(void);            // efface la ligne correspondant à la latitude
+void effaceligne2(void);            // efface la ligne correspondant ï¿½ la latitude
 
-void effaceligne3(void);            // efface la ligne correspondant à la longitude
+void effaceligne3(void);            // efface la ligne correspondant ï¿½ la longitude
 
 void afficheecran1(void);   // langue
 
-void afficheecran2(void);   // réglages
+void afficheecran2(void);   // rï¿½glages
 
-void afficheecran3(void);   // réglage année
+void afficheecran3(void);   // rï¿½glage annï¿½e
 
-void afficheecran4(void);   // réglage mois
+void afficheecran4(void);   // rï¿½glage mois
 
-void afficheecran5(void);   // réglage jour
+void afficheecran5(void);   // rï¿½glage jour
 
-void afficheecran6(void);   // réglage heure
+void afficheecran6(void);   // rï¿½glage heure
 
-void afficheecran7(void);   // réglage min
+void afficheecran7(void);   // rï¿½glage min
 
-void afficheecran8(void);   // Ecran principal (après un appui de 5s sur le BP ON)
+void afficheecran8(void);   // Ecran principal (aprï¿½s un appui de 5s sur le BP ON)
 
-void afficheecran9(void);   // réglage GPS
+void afficheecran9(void);   // rï¿½glage GPS
 
 void afficheecran10(void);  // choix mode ouverture
 
@@ -40,7 +44,7 @@ void afficheecran11(void);  // Reglage heure mode ouverture fixe
 
 void afficheecran12(void);  // Reglage min mode ouverture fixe
 
-void afficheecran13(void);  // choix sensibilité capteur J/N Ouverture
+void afficheecran13(void);  // choix sensibilitï¿½ capteur J/N Ouverture
 
 void afficheecran20(void);  // choix mode fermeture
 
@@ -48,9 +52,9 @@ void afficheecran21(void);  // Reglage heure mode fermeture fixe
 
 void afficheecran22(void);  // Reglage min mode fermeture fixe
 
-void afficheecran23(void);  // choix sensibilité capteur J/N Fermeture
+void afficheecran23(void);  // choix sensibilitï¿½ capteur J/N Fermeture
 
-void afficheecran24(void);  // réglage delai fermeture
+void afficheecran24(void);  // rï¿½glage delai fermeture
 
 
 

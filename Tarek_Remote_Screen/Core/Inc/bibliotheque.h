@@ -3,8 +3,9 @@
  *
  * Created on: 17 mai 2019
  * Author: Joel
- * Modified on: 19 Avril
- * ALLAM Tarek
+ *
+ * Modified on: 19 Avril 2026
+ * Author: ALLAM Tarek
  * for STM32 Portage
  */
 

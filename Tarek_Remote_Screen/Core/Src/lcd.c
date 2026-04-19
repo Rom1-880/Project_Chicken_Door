@@ -6,6 +6,10 @@
  *
  *      Modified on March 11, 2020
  *      Author: IMBERT Joel
+ *
+ *       * Modified on: 19 Avril 2026
+ * 		Author: ALLAM Tarek
+ * 		for STM32 Portage
  */
 
 /*
@@ -18,7 +22,7 @@
 void initialise_LCD(void)
 {
     P1DIR    = P1DIR|BIT5;  // Reset de l'afficheur sur P1.5 mis en sortie
-    P1OUT = P1OUT|BIT5;     // Reset afficheur mis à 1 (pas de reset)
+    P1OUT = P1OUT|BIT5;     // Reset afficheur mis ï¿½ 1 (pas de reset)
 
     P4DIR = P4DIR|BIT2;     // Alimentation de l'afficheur sur P4.2 mis en sortie
     P4OUT = P4OUT&~BIT2;    // alimentation de l'afficheur en mettant 0V sur la broche de commande
