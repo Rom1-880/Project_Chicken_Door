@@ -10,30 +10,37 @@
  */
 #ifndef LCD_H_
 #define LCD_H_
-/*--------Ancien-------
-#include "typedefs.h"
-#include "config.h"*/
-//--------Nouveau------
-#include "main.h" // Indispensable pour connaître les broches CS, etc.
-#include <stdint.h>
-void initialise_LCD(void);
 
+#include <stdint.h>
+#include "main.h" // Pour que lcd.c connaisse CS, A0, etc.
+
+// --- ANCIEN --- (Gardé pour historique)
+/*
+void initialise_LCD(void);
 void initLCD();
 void setArea(u_char xStart, u_char yStart, u_char xEnd, u_char yEnd);
 
 u_char getScreenWidth();
 u_char getScreenHeight();
 void setOrientation(u_char orientation);
+*/
+
+// --- NOUVEAU --- (Types corrigés pour STM32, u_char remplacé par uint8_t)
+void initialise_LCD(void);
+void initLCD(void);
+void setArea(uint8_t xStart, uint8_t yStart, uint8_t xEnd, uint8_t yEnd);
+
+uint8_t getScreenWidth(void);
+uint8_t getScreenHeight(void);
+void setOrientation(uint8_t orientation);
+
+
+// --- LA SUITE EST CONSERVEE A L'IDENTIQUE ---
+
+#define ST7735 // On force la sélection de ton écran
 
 #ifdef ST7735
-//
-
-/*
-#define LONG_EDGE_PIXELS 160
-#define SHORT_EDGE_PIXELS 128
- */
-
-// Augmentation de la taille de l'�cran, sinon, on n'arrive pas � effacer le bord droit!
+// Augmentation de la taille de l'écran, sinon, on n'arrive pas à effacer le bord droit!
 #define LONG_EDGE_PIXELS 160
 #define SHORT_EDGE_PIXELS 130
 
@@ -63,7 +70,7 @@ void setOrientation(u_char orientation);
 #define ORIENTATION_VERTICAL_ROTATED 2
 #define ORIENTATION_HORIZONTAL_ROTATED 3
 
-// driver specific
+// driver specific (Commandes ST7735)
 #define SWRESET		0x01
 #define	BSTRON		0x03
 #define RDDIDIF		0x04
@@ -98,6 +105,7 @@ void setOrientation(u_char orientation);
 #define SETEXTCMD	0xC1
 #define SETGAMMAP	0xC2
 #define SETGAMMAN	0xC3
+
 // ILI9225B specific
 #define ILIGRAMADDRX	0x20
 #define ILIGRAMADDRY 	0x21
