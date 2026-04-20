@@ -10,8 +10,7 @@
  */
 #ifndef GRAPHICS_H_
 #define GRAPHICS_H_
-//--------Ancien-------
-// #include "typedefs.h"
+#include "typedefs.h"
 //--------Nouveau------
 #include <stdint.h>
 // font sizes

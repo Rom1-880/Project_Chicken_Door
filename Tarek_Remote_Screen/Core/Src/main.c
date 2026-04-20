@@ -252,23 +252,23 @@ static void MX_GPIO_Init(void)
   __HAL_RCC_GPIOB_CLK_ENABLE();
 
   /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(GPIOA, GPIO_PIN_5|A0_Pin|ALIM_AFF_Pin, GPIO_PIN_RESET);
+  HAL_GPIO_WritePin(GPIOA, A0_Pin|ALIM_AFF_Pin, GPIO_PIN_RESET);
 
   /*Configure GPIO pin Output Level */
   HAL_GPIO_WritePin(GPIOB, CS_Pin|RST_Pin, GPIO_PIN_RESET);
-
-  /*Configure GPIO pins : PA5 A0_Pin ALIM_AFF_Pin */
-  GPIO_InitStruct.Pin = GPIO_PIN_5|A0_Pin|ALIM_AFF_Pin;
-  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
-  GPIO_InitStruct.Pull = GPIO_NOPULL;
-  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
-  HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
 
   /*Configure GPIO pins : TOUCH_DOWN_Pin TOUCH_MENU_Pin TOUCH_OK_Pin TOUCH_UP_Pin */
   GPIO_InitStruct.Pin = TOUCH_DOWN_Pin|TOUCH_MENU_Pin|TOUCH_OK_Pin|TOUCH_UP_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
+
+  /*Configure GPIO pins : A0_Pin ALIM_AFF_Pin */
+  GPIO_InitStruct.Pin = A0_Pin|ALIM_AFF_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+  HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
 
   /*Configure GPIO pins : CS_Pin RST_Pin */
   GPIO_InitStruct.Pin = CS_Pin|RST_Pin;

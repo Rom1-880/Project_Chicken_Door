@@ -7,30 +7,43 @@
  *      Modified on March 11, 2020
  *      Author: IMBERT Joel
  *
- *       * Modified on: 19 Avril 2026
+ *       * Modified on: April 20, 2026
  * 		Author: ALLAM Tarek
  * 		for STM32 Portage
  */
 
-/*
 #include "lcd.h"
-#include "msp.h"
 #include "config.h"
-*/
 #include "bibliotheque.h"
 
 void initialise_LCD(void)
 {
-    P1DIR    = P1DIR|BIT5;  // Reset de l'afficheur sur P1.5 mis en sortie
-    P1OUT = P1OUT|BIT5;     // Reset afficheur mis � 1 (pas de reset)
-
-    P4DIR = P4DIR|BIT2;     // Alimentation de l'afficheur sur P4.2 mis en sortie
-    P4OUT = P4OUT&~BIT2;    // alimentation de l'afficheur en mettant 0V sur la broche de commande
-
+// --- ANCIEN (MSP430) ---
+/*
+    P1DIR    = P1DIR|BIT5;
+    P1OUT = P1OUT|BIT5;
+    P4DIR = P4DIR|BIT2;
+    P4OUT = P4OUT&~BIT2;
     initMSP430();
-    _delay_cycles(160000);  // wait
-    initLCD();
-    clearScreen(1);
+    _delay_cycles(160000);
+*/
+
+// --- NOUVEAU (STM32) ---
+    // 1. Allumage de l'écran via le transistor PNP (Q1)
+    HAL_GPIO_WritePin(ALIM_AFF_GPIO_Port, ALIM_AFF_Pin, GPIO_PIN_RESET);
+    HAL_Delay(10);
+
+    // 2. Séquence de Reset matériel de l'écran
+    HAL_GPIO_WritePin(RST_GPIO_Port, RST_Pin, GPIO_PIN_SET);
+    HAL_Delay(5);
+    HAL_GPIO_WritePin(RST_GPIO_Port, RST_Pin, GPIO_PIN_RESET);
+    HAL_Delay(20);
+    HAL_GPIO_WritePin(RST_GPIO_Port, RST_Pin, GPIO_PIN_SET);
+    HAL_Delay(150);
+
+// --- SUITE COMMUNE ---
+    initLCD();      // Appel de la configuration logicielle SPI
+    clearScreen(1); // Efface l'écran
 }
 
 u_char _orientation = 0;

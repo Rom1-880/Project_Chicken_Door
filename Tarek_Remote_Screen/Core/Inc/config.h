@@ -1,19 +1,28 @@
 /*
  * config.h
  *
- *  Created on: Jul 12, 2013
- *      Author: RobG
- *  Modified on: 19 Avril 2026
- * 		Author: ALLAM Tarek
- * 		for STM32 Portage
+ * Created on: Jul 12, 2013
+ * Author: RobG
+ *
+ * Modified on: 20 Avril 2026
+ * Author: ALLAM Tarek
+ * for STM32 Portage
  */
 
 #ifndef CONFIG_H_
 #define CONFIG_H_
 
-// --- NOUVEAU (Configuration de l'écran conservée) ---
+#include "main.h"   // Requis pour que lcd.c et config.c connaissent les broches
+#include <stdint.h> // Requis pour uint8_t et uint32_t
+
+// --- NOUVEAU (Configuration de l'écran et Prototypes) ---
 #define ST7735
 #define ORIENTATION 1 // 0=Portrait, 1=Paysage (Horizontal)
+
+// Les "cartes de visite" des fonctions codées dans config.c
+void writeCommand(uint8_t cmd);
+void writeData(uint8_t data);
+void delay(uint32_t t);
 
 // --- ANCIEN (Spécifique au MSP430 - Désactivé) ---
 /*

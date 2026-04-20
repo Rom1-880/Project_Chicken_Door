@@ -25,16 +25,16 @@
 */
 
 // --- INCLUSIONS DU PROJET (Conservées) ---
-//#include "typedefs.h" // A décommenter si tu as ce fichier
+#include "typedefs.h"
 #include "lcd.h"
-//#include "config.h"   // A décommenter si tu as ce fichier
+#include "config.h"
 //#include "horloge.h"  // A décommenter si tu as ce fichier
 #include "graphics.h"
 //#include "PWM.h"
 //#include "mesure_analogique.h"
 //#include "menu.h"
 #include "affichagemenu.h"
-//#include "serial.h"
+#include "serial.h"
 //#include "ephemeride.h"
 //#include "flash.h"
 
