@@ -21,8 +21,8 @@
 #define FONT_MD_BKG	4
 #define FONT_LG_BKG	5
 //--------Ancien-------
-/*void setColor(u_int color);
-void setBackgroundColor(u_int color);*/
+/*void setColor(uint16_t color);
+void setBackgroundColor(uint16_t color);*/
 //--------Nouveau------
 void setColor(uint16_t color);
 void setBackgroundColor(uint16_t color);

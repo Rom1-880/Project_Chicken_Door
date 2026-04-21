@@ -18,7 +18,8 @@
 /* USER CODE END Header */
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
-
+#include "lcd.h"
+#include "graphics.h"
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 
@@ -96,8 +97,30 @@ int main(void)
   MX_USART2_UART_Init();
   /* USER CODE BEGIN 2 */
 
-  /* USER CODE END 2 */
+    // 1. Initialisation de l'écran
+    initialise_LCD();
 
+    // 2. Nettoyer l'écran (fond noir)
+    // blackWhite = 1 selon ta fonction clearScreen mettra le fond en 0x0000 (Noir)
+    clearScreen(1);
+
+    // 3. Configuration des couleurs pour le texte
+    // F800 = Rouge, 0xFFFF = Blanc, 0x07E0 = Vert
+
+    // "1 2 3" en Blanc
+    setColor(0xFFFF);
+    setBackgroundColor(0x0000);
+    drawString(20, 30, FONT_LG, "1 2 3");
+
+    // "VIVA" en Vert
+    setColor(0x07E0);
+    drawString(20, 60, FONT_LG, "VIVA");
+
+    // "L'ALGERIE !" en Rouge
+    setColor(0xF800);
+    drawString(20, 90, FONT_LG, "L'ALGERIE !");
+
+    /* USER CODE END 2 */
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
   while (1)

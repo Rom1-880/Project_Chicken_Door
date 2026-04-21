@@ -25,7 +25,7 @@ typedef unsigned int u_int;
 
 // --- NOUVEAU (Sécurisé pour STM32) ---
 typedef uint8_t  u_char; // Force 8 bits (0-255)
-typedef uint16_t u_int;  // Force 16 bits (0-65535) -> Vital pour les couleurs !
+// typedef uint16_t u_int;  // Force 16 bits (0-65535) -> Vital pour les couleurs !
 
 #endif
 
