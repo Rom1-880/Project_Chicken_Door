@@ -99,7 +99,7 @@ int main(void)
 
     // 1. Initialisation de l'écran
     initialise_LCD();
-
+    setOrientation(4);
     // 2. Nettoyer l'écran (fond noir)
     // blackWhite = 1 selon ta fonction clearScreen mettra le fond en 0x0000 (Noir)
     clearScreen(1);
