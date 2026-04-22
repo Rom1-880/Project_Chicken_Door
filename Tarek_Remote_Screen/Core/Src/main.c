@@ -22,7 +22,7 @@
 #include "graphics.h"
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
-
+#include "variables_globales.h" // Bibliotheque de des variables utlisés
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -47,7 +47,26 @@ SPI_HandleTypeDef hspi1;
 UART_HandleTypeDef huart2;
 
 /* USER CODE BEGIN PV */
+// ---- Instanciation des variables globales ----
+time_t temps = 0;
+struct tm tm_temps = {0};
+signed char UTC = 1;        // Par défaut (ex: hiver France)
+signed char absUTC = 1;
 
+long tensionpile = 645;     // Simulons une pile pleine au démarrage
+char langue = 2;            // Par défaut : 2 (Français)
+
+char modeO = 1;             // Heure fixe par défaut
+char modeF = 1;             // Heure fixe par défaut
+signed char heureO = 8;     // Ouvre à 8h00
+signed char minO = 0;
+signed char heureF = 20;    // Ferme à 20h00
+signed char minF = 0;
+char signed minretard = 15; // 15 min de retard par défaut
+
+signed char latitude = 48;  // Ex: Paris
+int longitude = 2;          // Ex: Paris
+char choixi = 1;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
