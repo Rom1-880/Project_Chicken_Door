@@ -161,7 +161,7 @@ void menu()
                        if ((langue-choix)!=0) clearScreen(1);                                      // efface l'ecran en cas de changement de langue
                        langue = choix;
 
-                       flash_erase(0xFA00);
+                       //// --------A cooriger----flash_erase(0xFA00);
 
                        flash_write(0xFA00,langue);       // pourquoi 2 fois?
                        flash_write(0xFA00,langue);       // pourquoi 2 fois?
@@ -496,7 +496,7 @@ void menu()
                         if (choixi==1) choixi=2;  // passe � la lattitude
                         else
                             {
-                            flash_erase(0xFA00);
+                            //// --------A cooriger----flash_erase(0xFA00);
 
                             flash_write(0xFA00,langue);       // pourquoi 2 fois?
                             flash_write(0xFA00,langue);       // pourquoi 2 fois?
