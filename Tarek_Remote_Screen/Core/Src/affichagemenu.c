@@ -327,6 +327,9 @@ void afficheecran8(void)   // Ecran principal (après un appui de 5s sur le BP O
         eff=1;
         }
 */
+	char chaine[10];         // Tableau pour stocker la nouvelle heure sous forme de texte
+	static char chainep[10]; // "static" pour mémoriser l'ancienne heure d'un passage à l'autre
+	static uint8_t eff = 1;  // "static" pour le flag d'effacement, initialisé à 1
     setColor(COLOR_16_WHITE);
 
     if (langue==1)

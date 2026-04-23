@@ -23,6 +23,7 @@
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 #include "variables_globales.h" // Bibliotheque de des variables utlisés
+#include <string.h>
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -47,6 +48,7 @@ SPI_HandleTypeDef hspi1;
 UART_HandleTypeDef huart2;
 
 /* USER CODE BEGIN PV */
+//------------NOUVEAU-----------------
 // ---- Instanciation des variables globales ----
 time_t temps = 0;
 struct tm tm_temps = {0};
@@ -67,6 +69,13 @@ char signed minretard = 15; // 15 min de retard par défaut
 signed char latitude = 48;  // Ex: Paris
 int longitude = 2;          // Ex: Paris
 char choixi = 1;
+
+// VARIABLES DE NAVIGATION (Globales pour être vues par menu.c)
+uint8_t ON = 0;
+uint8_t DWN = 0;
+uint8_t HUP = 0;
+uint8_t RTN = 0;
+uint8_t ecran = 0; // état de la machine d'état (0 = Accueil)
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -80,7 +89,60 @@ static void MX_USART2_UART_Init(void);
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
+// Variables globales de tes boutons
+uint8_t touche_ON = 0;
+uint8_t touche_DWN = 0;
+uint8_t touche_HUP = 0;
+uint8_t touche_RTN = 0;
 
+void lire_commandes_Docklight(void) {
+    static char rx_buffer[10]; // Stocke le mot en cours de réception
+    static uint8_t index = 0;
+    uint8_t rx_char;
+
+    // Remise à zéro des boutons à chaque passage
+    touche_ON = 0;
+    touche_DWN = 0;
+    touche_HUP = 0;
+    touche_RTN = 0;
+
+    // Lecture d'un caractère (non bloquant)
+    if (HAL_UART_Receive(&huart2, &rx_char, 1, 0) == HAL_OK) {
+        // Si on reçoit 'Entrée' (\r ou \n), le mot est complet
+        if (rx_char == '\r' || rx_char == '\n') {
+            rx_buffer[index] = '\0'; // On termine la chaîne de caractères
+
+            // On compare le mot reçu
+                        if (strcmp(rx_buffer, "ON") == 0) {
+                            touche_ON = 1;
+                            char msg[] = "--> Action: ON\r\n";
+                            HAL_UART_Transmit(&huart2, (uint8_t*)msg, strlen(msg), 100);
+                        }
+                        else if (strcmp(rx_buffer, "DWN") == 0) {
+                            touche_DWN = 1;
+                            char msg[] = "--> Action: DWN\r\n";
+                            HAL_UART_Transmit(&huart2, (uint8_t*)msg, strlen(msg), 100);
+                        }
+                        else if (strcmp(rx_buffer, "HUP") == 0) {
+                            touche_HUP = 1;
+                            char msg[] = "--> Action: HUP\r\n";
+                            HAL_UART_Transmit(&huart2, (uint8_t*)msg, strlen(msg), 100);
+                        }
+                        else if (strcmp(rx_buffer, "RTN") == 0) {
+                            touche_RTN = 1;
+                            char msg[] = "--> Action: RTN\r\n";
+                            HAL_UART_Transmit(&huart2, (uint8_t*)msg, strlen(msg), 100);
+                        }
+        		}
+        else {
+            // Sinon, on ajoute la lettre au mot (si on ne dépasse pas la taille du buffer)
+            if (index < 9) {
+                rx_buffer[index] = (char)rx_char;
+                index++;
+            }
+        }
+    }
+}
 /* USER CODE END 0 */
 
 /**
@@ -139,11 +201,25 @@ int main(void)
     setColor(0xF800);
     drawString(20, 90, FONT_LG, "L'ALGERIE !");
 
+    char message_init[] = "\r\n=== LIAISON SERIE INITIALISEE ===\r\nEnvoyez ON, DWN, HUP ou RTN pour naviguer.\r\n";
+     HAL_UART_Transmit(&huart2, (uint8_t*)message_init, strlen(message_init), HAL_MAX_DELAY);
+
     /* USER CODE END 2 */
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
   while (1)
   {
+	  // 1. Lire les mots venant de Docklight
+	        lire_commandes_Docklight();
+
+	        // 2. Transférer aux variables de ta machine à états
+	        ON = touche_ON;
+	        DWN = touche_DWN;
+	        HUP = touche_HUP;
+	        RTN = touche_RTN;
+
+	        // 3. Ta machine à états .
+	        menu(); // Appel de ta machine à états
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
