@@ -1,0 +1,9 @@
+../Core/Src/lcd.c:43:6:writeCommand	1
+../Core/Src/lcd.c:57:6:writeData	1
+../Core/Src/lcd.c:72:6:initialise_LCD	1
+../Core/Src/lcd.c:88:8:getScreenWidth	3
+../Core/Src/lcd.c:95:8:getScreenHeight	3
+../Core/Src/lcd.c:102:6:setArea	1
+../Core/Src/lcd.c:182:6:gammaAdjustmentST7735	3
+../Core/Src/lcd.c:202:6:initLCD	1
+../Core/Src/lcd.c:221:6:setOrientation	5
