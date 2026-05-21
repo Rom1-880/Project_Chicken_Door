@@ -169,7 +169,7 @@ float Get_Motor_Current(void)
 {
    uint32_t raw_value = 0;
    float res_ohm = 1.3f;
-   float offset = 0.090f;
+   float offset = 0.062f;
     HAL_ADC_Start(&hadc1);
    if (HAL_ADC_PollForConversion(&hadc1, 100) == HAL_OK) {
        adc_value = HAL_ADC_GetValue(&hadc1);

@@ -39,13 +39,13 @@ Idx Name          Size      VMA       LMA       File off  Algn
                   CONTENTS, READONLY, DEBUGGING, OCTETS
  17 .debug_line   00019bf2  00000000  00000000  0004a0da  2**0
                   CONTENTS, READONLY, DEBUGGING, OCTETS
- 18 .debug_str    000b970b  00000000  00000000  00063ccc  2**0
+ 18 .debug_str    000b96b1  00000000  00000000  00063ccc  2**0
                   CONTENTS, READONLY, DEBUGGING, OCTETS
- 19 .comment      00000043  00000000  00000000  0011d3d7  2**0
+ 19 .comment      00000043  00000000  00000000  0011d37d  2**0
                   CONTENTS, READONLY
- 20 .debug_frame  00006364  00000000  00000000  0011d41c  2**2
+ 20 .debug_frame  00006364  00000000  00000000  0011d3c0  2**2
                   CONTENTS, READONLY, DEBUGGING, OCTETS
- 21 .debug_line_str 00000082  00000000  00000000  00123780  2**0
+ 21 .debug_line_str 00000074  00000000  00000000  00123724  2**0
                   CONTENTS, READONLY, DEBUGGING, OCTETS
 
 Disassembly of section .text:
@@ -6821,7 +6821,7 @@ float Get_Motor_Current(void)
    float res_ohm = 1.3f;
  800356e:	4b2d      	ldr	r3, [pc, #180]	@ (8003624 <Get_Motor_Current+0xc0>)
  8003570:	60bb      	str	r3, [r7, #8]
-   float offset = 0.090f;
+   float offset = 0.062f;
  8003572:	4b2d      	ldr	r3, [pc, #180]	@ (8003628 <Get_Motor_Current+0xc4>)
  8003574:	607b      	str	r3, [r7, #4]
     HAL_ADC_Start(&hadc1);
@@ -6914,7 +6914,7 @@ float Get_Motor_Current(void)
  8003620:	bd80      	pop	{r7, pc}
  8003622:	46c0      	nop			@ (mov r8, r8)
  8003624:	3fa66666 	.word	0x3fa66666
- 8003628:	3db851ec 	.word	0x3db851ec
+ 8003628:	3d7df3b6 	.word	0x3d7df3b6
  800362c:	20000204 	.word	0x20000204
  8003630:	20000408 	.word	0x20000408
  8003634:	40533333 	.word	0x40533333
@@ -7451,7 +7451,7 @@ int main(void)
       // 3. MODE VEILLE (SI MOTEUR OFF)
       else
       {
-          // Petit message pour confirmer l'entrée en veille dans Hercules
+          //  message  confirmer entrée  veille  Hercules
           HAL_UART_Transmit(&huart2, (uint8_t*)"Moteur OFF - Sleep Mode...\r\n", 28, 50);
  8003998:	4931      	ldr	r1, [pc, #196]	@ (8003a60 <main+0x394>)
  800399a:	4819      	ldr	r0, [pc, #100]	@ (8003a00 <main+0x334>)
@@ -12068,15 +12068,9 @@ HAL_StatusTypeDef HAL_ADC_ConfigChannel(ADC_HandleTypeDef *hadc, const ADC_Chann
  8005120:	683b      	ldr	r3, [r7, #0]
  8005122:	681b      	ldr	r3, [r3, #0]
  8005124:	61bb      	str	r3, [r7, #24]
-#if ((defined (__ARM_ARCH_7M__      ) && (__ARM_ARCH_7M__      == 1)) || \
-     (defined (__ARM_ARCH_7EM__     ) && (__ARM_ARCH_7EM__     == 1)) || \
-     (defined (__ARM_ARCH_8M_MAIN__ ) && (__ARM_ARCH_8M_MAIN__ == 1))    )
-   __ASM ("rbit %0, %1" : "=r" (result) : "r" (value) );
-#else
   uint32_t s = (4U /*sizeof(v)*/ * 8U) - 1U; /* extra shift needed at end */
  8005126:	231f      	movs	r3, #31
  8005128:	617b      	str	r3, [r7, #20]
-
   result = value;                      /* r will be reversed bits of v; first get LSB of v */
  800512a:	69bb      	ldr	r3, [r7, #24]
  800512c:	613b      	str	r3, [r7, #16]
@@ -12085,7 +12079,6 @@ HAL_StatusTypeDef HAL_ADC_ConfigChannel(ADC_HandleTypeDef *hadc, const ADC_Chann
  8005130:	085b      	lsrs	r3, r3, #1
  8005132:	61bb      	str	r3, [r7, #24]
  8005134:	e00e      	b.n	8005154 <HAL_ADC_ConfigChannel+0xd0>
-  {
     result <<= 1U;
  8005136:	693b      	ldr	r3, [r7, #16]
  8005138:	005b      	lsls	r3, r3, #1
@@ -12108,31 +12101,22 @@ HAL_StatusTypeDef HAL_ADC_ConfigChannel(ADC_HandleTypeDef *hadc, const ADC_Chann
  8005154:	69bb      	ldr	r3, [r7, #24]
  8005156:	2b00      	cmp	r3, #0
  8005158:	d1ed      	bne.n	8005136 <HAL_ADC_ConfigChannel+0xb2>
-  }
   result <<= s;                        /* shift when v's highest bits are zero */
  800515a:	693a      	ldr	r2, [r7, #16]
  800515c:	697b      	ldr	r3, [r7, #20]
  800515e:	409a      	lsls	r2, r3
  8005160:	0013      	movs	r3, r2
  8005162:	613b      	str	r3, [r7, #16]
-#endif
   return result;
  8005164:	693b      	ldr	r3, [r7, #16]
  8005166:	61fb      	str	r3, [r7, #28]
-     optimisations using the logic "value was passed to __builtin_clz, so it
-     is non-zero".
-     ARM GCC 7.3 and possibly earlier will optimise this test away, leaving a
-     single CLZ instruction.
-   */
   if (value == 0U)
  8005168:	69fb      	ldr	r3, [r7, #28]
  800516a:	2b00      	cmp	r3, #0
  800516c:	d101      	bne.n	8005172 <HAL_ADC_ConfigChannel+0xee>
-  {
     return 32U;
  800516e:	2320      	movs	r3, #32
  8005170:	e004      	b.n	800517c <HAL_ADC_ConfigChannel+0xf8>
-  }
   return __builtin_clz(value);
  8005172:	69f8      	ldr	r0, [r7, #28]
  8005174:	f7fb f9d2 	bl	800051c <__clzsi2>
