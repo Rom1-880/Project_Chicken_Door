@@ -118,6 +118,11 @@ float v_bat_lisse = 0.0f;
 //Nombre d'échantillons
 const int nb_echantillons = 10;
 
+   //==================================================================//
+  //               		MISE EN VEILLE PROCESSEUR                     //
+ //==================================================================//
+
+uint32_t duree_veille = 60000; // 120 000 ms = 2 minutes
 
 /* USER CODE END PV */
 
@@ -228,6 +233,19 @@ int main(void)
 
       HAL_ADC_Stop(&hadc1);
 */
+/*
+      //==================================================================//
+     //               		MISE EN VEILLE PROCESSEUR                    //
+    //==================================================================//
+	  // On rallume le pont AVANT de vérifier si l'ADC est prêt
+	        HAL_GPIO_WritePin(GPIOA, GPIO_PIN_4, GPIO_PIN_SET);
+
+	        // On laisse 150ms à la TENSION physique pour remonter et se stabiliser
+	        // C'est ce délai qui va corriger ton "0.47V"
+	        HAL_Delay(5000);
+*/
+	        // On attend que le DMA ait fini sa première nouvelle capture
+	        while(adc_ready == 0);
 
 	      if (adc_ready == 1)
 	      {
@@ -276,15 +294,20 @@ int main(void)
          //                        PARTIE ÉNERGIE PILE                       //
         //==================================================================//
 
+//LISSAGE DIRECT DE LA VALEUR BRUTE ADC
+// On passe la valeur brute 'adc_bat_value' (0-4095) dans le filtre
+         float adc_bat_moyen = lisser_tension_batterie(adc_bat_value);
+
 //Tension sur la PIN PA0 (entre 0 et 3.3V car elle ne prend que 3.3V)
-          v_bat_measurer = ((float)adc_bat_value) * VCC / 4095.0;
+          //v_bat_measurer = ((float)adc_bat_value) * VCC / 4095.0;
+			v_bat_measurer = (adc_bat_moyen) * VCC / 4095.0;
 
 // Tension Réel des piles (Application du Coef)
           //v_bat_reel = v_bat_measurer * PDP_Bat_Coef;
-          v_bat_reel = (v_bat_measurer * PDP_Bat_Coef) + OFFSET_BAT;
+          v_bat_lisse = (v_bat_measurer * PDP_Bat_Coef) + OFFSET_BAT;
 
           // Lissage de V_bat_reel
-          v_bat_lisse = lisser_tension_batterie(v_bat_reel); // obtention d'une valeur stable
+         // v_bat_lisse = lisser_tension_batterie(v_bat_reel); // obtention d'une valeur stable
 
  /*         // Ajout de l'Offset pour corriger la mesure
           v_bat_reel = v_bat_reel + OFFSET_BAT;
@@ -292,7 +315,7 @@ int main(void)
           HAL_Delay(100); // 10 mesures * 100ms = 1 seconde totale pour la moyenne
 
       //Calcul du pourcentage (Produit en croix entre V_MIN et V_MAX) -- Calcul linéaire -- pas bon car les piles n'ont pas une courbe linéaire
-      if (v_bat_reel > V_MIN){
+      if (v_bat_lisse > V_MIN){
     	  bat_pourcentage = (int)(((v_bat_lisse - V_MIN)/(V_MAX - V_MIN))*100.0f);
       } else {
     	  bat_pourcentage = 0;
@@ -331,9 +354,9 @@ int main(void)
 
              HAL_Delay(1000); // On attend 0.5 secondes entre chaque mesures
 
-          int len3 = sprintf(msg, "BRUT_LDR: %lu | BRUT_BAT: %lu\r\n", adc_value, adc_bat_value);
+/*          int len3 = sprintf(msg, "BRUT_LDR: %lu | BRUT_BAT: %lu\r\n", adc_value, adc_bat_value);
               HAL_UART_Transmit(&huart2, (uint8_t*)msg, len3, 100);
-
+*/
       // 5. COMMANDE DE LA LED (Seuil : 50 Lux)
       //if (lux < 50.0) {
       //    HAL_GPIO_WritePin(GPIOA, GPIO_PIN_4, GPIO_PIN_SET);   // Allume (Nuit)
@@ -341,6 +364,26 @@ int main(void)
       //    HAL_GPIO_WritePin(GPIOA, GPIO_PIN_4, GPIO_PIN_RESET); // Éteint (Jour)
       //}
 
+
+              //==================================================================//
+             //               		MISE EN VEILLE PROCESSEUR                    //
+            //==================================================================//
+
+              // On éteint le pont diviseur (PA4) pour ne pas vider les piles pendant les 2 min
+                    HAL_GPIO_WritePin(GPIOA, GPIO_PIN_4, GPIO_PIN_RESET);
+
+             // On entre en mode sommeil (Sleep Mode) pour réduire la consommation du CPU
+             // Le CPU s'arrêtera ici et se réveillera brièvement toutes les 1ms (SysTick) pour le Delay
+                    HAL_PWR_EnterSLEEPMode(PWR_MAINREGULATOR_ON, PWR_SLEEPENTRY_WFI);
+
+             // 3. On attend les 2 minutes
+                    HAL_Delay(duree_veille);
+
+            // 4. Au réveil, on rallume le pont diviseur pour la prochaine lecture
+                    HAL_GPIO_WritePin(GPIOA, GPIO_PIN_4, GPIO_PIN_SET);
+
+             // 5. On laisse un tout petit délai pour que la tension se stabilise avant la prochaine conversion
+                    HAL_Delay(10);
 
 	      }
 
@@ -606,6 +649,7 @@ static void MX_GPIO_Init(void)
 }
 
 /* USER CODE BEGIN 4 */
+
 // Callback appelé automatiquement par le DMA quand les 2 canaux sont convertis
 void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef* hadc)
 {
@@ -649,25 +693,26 @@ uint8_t estimer_pourcentage_batterie(float v_bat_reel) {
 */
 
     // Calcul de la moyenne pour la tension de batterie
-    float lisser_tension_batterie(float nouvelle_lecture) {
+    float lisser_tension_batterie(float nouvelle_lecture_adc) {
     	static float historique [100] = {0}; // tableau qui reste en mémoire (static) //garde les 50 dernière valeur en mémoire
     	static int index = 0;
     	float somme = 0;
 
-   /* 	static int premier_passage = 1; // Flag pour le démarrage pour stabilité imédiate
+    // Affichage immédiat
+   	static int premier_passage = 1; // Flag pour le démarrage pour stabilité imédiate
 
     //Fonctionnement pour stabilité imédiate - Ajout de la nouvelle mesure dans le tableau
     	if (premier_passage) {
     	        for (int i = 0; i < nb_echantillons; i++) {
-    	            historique[i] = nouvelle_lecture; // On remplit tout le tableau avec la 1ère mesure
+    	            historique[i] = (float) nouvelle_lecture_adc; // On remplit tout le tableau avec la 1ère mesure
     	        }
     	        premier_passage = 0;
-    	        return nouvelle_lecture;
+    	        return (float) nouvelle_lecture_adc;
     	    }
-*/
+
 
     // Fonctionnement Normal -- Ajout de la nouvelle mesure dans le tableau
-    historique[index] = nouvelle_lecture;
+    historique[index] = nouvelle_lecture_adc;
     index = (index + 1) % nb_echantillons; // On boucle de 0 à 49
 
     // Fonctionnement Normal -- Calcul de la moyenne
