@@ -64,6 +64,8 @@ DMA_HandleTypeDef hdma_adc1;
 
 DAC_HandleTypeDef hdac1;
 
+TIM_HandleTypeDef htim2;
+
 UART_HandleTypeDef huart2;
 
 /* USER CODE BEGIN PV */
@@ -122,7 +124,8 @@ const int nb_echantillons = 10;
   //               		MISE EN VEILLE PROCESSEUR                     //
  //==================================================================//
 
-uint32_t duree_veille = 60000; // 120 000 ms = 2 minutes
+//uint32_t duree_veille = 60000; // 120 000 ms = 2 minutes
+uint8_t compteur_minutes = 0; // Compte les minutes en veille
 
 /* USER CODE END PV */
 
@@ -133,12 +136,15 @@ static void MX_DMA_Init(void);
 static void MX_USART2_UART_Init(void);
 static void MX_ADC1_Init(void);
 static void MX_DAC1_Init(void);
+static void MX_TIM2_Init(void);
 /* USER CODE BEGIN PFP */
 uint8_t estimer_pourcentage_batterie(float v_bat_reel); // car besoin d'un prototype pour le pourcentage
 
 //Prévient que l'outil existe (Prototype)
 float lisser_tension_batterie(float nouvelle_lecture);
 
+//Mise en veille du processeur
+void Aller_Au_Dodo(void);
 
 /* USER CODE END PFP */
 
@@ -180,6 +186,7 @@ int main(void)
   MX_USART2_UART_Init();
   MX_ADC1_Init();
   MX_DAC1_Init();
+  MX_TIM2_Init();
   /* USER CODE BEGIN 2 */
   HAL_ADCEx_Calibration_Start(&hadc1);
   HAL_GPIO_WritePin(GPIOA, GPIO_PIN_4, GPIO_PIN_SET); // Alimente le pont diviseur
@@ -368,7 +375,7 @@ int main(void)
               //==================================================================//
              //               		MISE EN VEILLE PROCESSEUR                    //
             //==================================================================//
-
+/*
               // On éteint le pont diviseur (PA4) pour ne pas vider les piles pendant les 2 min
                     HAL_GPIO_WritePin(GPIOA, GPIO_PIN_4, GPIO_PIN_RESET);
 
@@ -384,15 +391,32 @@ int main(void)
 
              // 5. On laisse un tout petit délai pour que la tension se stabilise avant la prochaine conversion
                     HAL_Delay(10);
+*/
+    // DEBUT DE LA VEILLE DE X MINUTES (X x 1 Minute)
+     compteur_minutes = 0;
+     while (compteur_minutes < 1 ) // la pour 10 minutes
+     	 {
+    	 Aller_Au_Dodo(); // Le CPU dort pendant 1 minute, puis se réveille ici
 
-	      }
+    	 compteur_minutes++;
+    	 }
+     // SORTIE DU MODE VEILLE
+     // On rallume le périphérique UART pour la prochaine boucle de mesure
+     MX_USART2_UART_Init();
 
+     // On rallume le pont diviseur pour préparer les composants de mesure
+     HAL_GPIO_WritePin(GPIOA, GPIO_PIN_4, GPIO_PIN_SET);
+
+     // Petit délai de stabilisation électrique (10ms) avant de relancer l'ADC
+      HAL_Delay(10);
+     }
+    }
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
     }
   /* USER CODE END 3 */
-}
+
 
 /**
   * @brief System Clock Configuration
@@ -546,6 +570,51 @@ static void MX_DAC1_Init(void)
 }
 
 /**
+  * @brief TIM2 Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_TIM2_Init(void)
+{
+
+  /* USER CODE BEGIN TIM2_Init 0 */
+
+  /* USER CODE END TIM2_Init 0 */
+
+  TIM_ClockConfigTypeDef sClockSourceConfig = {0};
+  TIM_MasterConfigTypeDef sMasterConfig = {0};
+
+  /* USER CODE BEGIN TIM2_Init 1 */
+
+  /* USER CODE END TIM2_Init 1 */
+  htim2.Instance = TIM2;
+  htim2.Init.Prescaler = 16000;
+  htim2.Init.CounterMode = TIM_COUNTERMODE_UP;
+  htim2.Init.Period = 60000;
+  htim2.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
+  htim2.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
+  if (HAL_TIM_Base_Init(&htim2) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  sClockSourceConfig.ClockSource = TIM_CLOCKSOURCE_INTERNAL;
+  if (HAL_TIM_ConfigClockSource(&htim2, &sClockSourceConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  sMasterConfig.MasterOutputTrigger = TIM_TRGO_RESET;
+  sMasterConfig.MasterSlaveMode = TIM_MASTERSLAVEMODE_DISABLE;
+  if (HAL_TIMEx_MasterConfigSynchronization(&htim2, &sMasterConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN TIM2_Init 2 */
+
+  /* USER CODE END TIM2_Init 2 */
+
+}
+
+/**
   * @brief USART2 Initialization Function
   * @param None
   * @retval None
@@ -625,9 +694,28 @@ static void MX_GPIO_Init(void)
   __HAL_RCC_GPIOF_CLK_ENABLE();
   __HAL_RCC_GPIOA_CLK_ENABLE();
   __HAL_RCC_GPIOB_CLK_ENABLE();
+  __HAL_RCC_GPIOD_CLK_ENABLE();
 
   /*Configure GPIO pin Output Level */
   HAL_GPIO_WritePin(GPIOA, GPIO_PIN_4, GPIO_PIN_RESET);
+
+  /*Configure GPIO pins : PF2 PF3 */
+  GPIO_InitStruct.Pin = GPIO_PIN_2|GPIO_PIN_3;
+  GPIO_InitStruct.Mode = GPIO_MODE_ANALOG;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  HAL_GPIO_Init(GPIOF, &GPIO_InitStruct);
+
+  /*Configure GPIO pins : PC0 PC1 PC2 PC3
+                           PC4 PC5 PC6 PC7
+                           PC8 PC9 PC10 PC11
+                           PC12 */
+  GPIO_InitStruct.Pin = GPIO_PIN_0|GPIO_PIN_1|GPIO_PIN_2|GPIO_PIN_3
+                          |GPIO_PIN_4|GPIO_PIN_5|GPIO_PIN_6|GPIO_PIN_7
+                          |GPIO_PIN_8|GPIO_PIN_9|GPIO_PIN_10|GPIO_PIN_11
+                          |GPIO_PIN_12;
+  GPIO_InitStruct.Mode = GPIO_MODE_ANALOG;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  HAL_GPIO_Init(GPIOC, &GPIO_InitStruct);
 
   /*Configure GPIO pin : PA4 */
   GPIO_InitStruct.Pin = GPIO_PIN_4;
@@ -635,6 +723,34 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
   HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
+
+  /*Configure GPIO pins : PA5 PA6 PA7 PA8
+                           PA9 PA10 PA11 PA12
+                           PA15 */
+  GPIO_InitStruct.Pin = GPIO_PIN_5|GPIO_PIN_6|GPIO_PIN_7|GPIO_PIN_8
+                          |GPIO_PIN_9|GPIO_PIN_10|GPIO_PIN_11|GPIO_PIN_12
+                          |GPIO_PIN_15;
+  GPIO_InitStruct.Mode = GPIO_MODE_ANALOG;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
+
+  /*Configure GPIO pins : PB0 PB1 PB2 PB10
+                           PB11 PB12 PB13 PB14
+                           PB15 PB3 PB4 PB5
+                           PB6 PB7 */
+  GPIO_InitStruct.Pin = GPIO_PIN_0|GPIO_PIN_1|GPIO_PIN_2|GPIO_PIN_10
+                          |GPIO_PIN_11|GPIO_PIN_12|GPIO_PIN_13|GPIO_PIN_14
+                          |GPIO_PIN_15|GPIO_PIN_3|GPIO_PIN_4|GPIO_PIN_5
+                          |GPIO_PIN_6|GPIO_PIN_7;
+  GPIO_InitStruct.Mode = GPIO_MODE_ANALOG;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
+
+  /*Configure GPIO pin : PD2 */
+  GPIO_InitStruct.Pin = GPIO_PIN_2;
+  GPIO_InitStruct.Mode = GPIO_MODE_ANALOG;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  HAL_GPIO_Init(GPIOD, &GPIO_InitStruct);
 
   /*Configure GPIO pins : I2C1_SCL_Pin I2C1_SDA_Pin */
   GPIO_InitStruct.Pin = I2C1_SCL_Pin|I2C1_SDA_Pin;
@@ -721,6 +837,54 @@ uint8_t estimer_pourcentage_batterie(float v_bat_reel) {
     }
     return somme / (float)nb_echantillons;
  }
+
+
+	  //==================================================================//
+	 //             MISE EN VEILLE PROCESSEUR - Fonction                 //
+	//==================================================================//
+
+    void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
+    {
+        if (htim->Instance == TIM2) // à testé avec ADC1
+        {
+            // Cette fonction est appelée automatiquement par le processeur
+            // à chaque fois que la minute est écoulée. Elle sert juste à valider le réveil.
+        }
+    }
+    void Aller_Au_Dodo(void)
+    {
+    //On coupe l'ADC pour qu'il arrête de consommer
+        HAL_ADC_Stop_DMA(&hadc1);
+    //On éteint le pont diviseur (PA4) pour économiser la batterie (des piles)
+        HAL_GPIO_WritePin(GPIOA, GPIO_PIN_4, GPIO_PIN_RESET);
+
+    //ON COUPE LE PORT SÉRIE (UART)
+    // On démonte le périphérique pour couper son horloge interne
+        HAL_UART_DeInit(&huart2);
+
+    // On force les broches TX/RX (PA2 et PA3) en mode Analogique pour couper les fuites de courant
+        GPIO_InitTypeDef GPIO_InitStruct = {0};
+        GPIO_InitStruct.Pin = GPIO_PIN_2 | GPIO_PIN_3;
+        GPIO_InitStruct.Mode = GPIO_MODE_ANALOG;
+        GPIO_InitStruct.Pull = GPIO_NOPULL;
+        HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
+   // On coupe le SysTick (l'horloge interne de 1ms qui empêcherait le dodo)
+        HAL_SuspendTick();
+
+   // On démarre notre alarme (le TIM2 va compter 1 minute)
+        HAL_TIM_Base_Start_IT(&htim2);
+
+   // LE PROCESSEUR PLONGE EN MODE SLEEP
+        HAL_PWR_EnterSLEEPMode(PWR_MAINREGULATOR_ON, PWR_SLEEPENTRY_WFI);
+
+   // ------------ Reveil de TIM2 après 1 Minute --------- //
+
+   // On arrête immédiatement le timer pour qu'il ne re-sonne pas en boucle
+        HAL_TIM_Base_Stop_IT(&htim2);
+
+  //On réactive le SysTick pour que le système reprenne son cours normal
+        HAL_ResumeTick();
+    }
 
 /* USER CODE END 4 */
 
