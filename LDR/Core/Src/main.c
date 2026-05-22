@@ -394,7 +394,7 @@ int main(void)
 */
     // DEBUT DE LA VEILLE DE X MINUTES (X x 1 Minute)
      compteur_minutes = 0;
-     while (compteur_minutes < 1 ) // la pour 10 minutes
+     while (compteur_minutes < 3 ) // la pour 10 minutes
      	 {
     	 Aller_Au_Dodo(); // Le CPU dort pendant 1 minute, puis se réveille ici
 
@@ -409,12 +409,16 @@ int main(void)
 
      // Petit délai de stabilisation électrique (10ms) avant de relancer l'ADC
       HAL_Delay(10);
+
+      // Relance de l'ADC
+      HAL_ADC_Start_DMA(&hadc1, (uint32_t*)adc_buffer, 2);
      }
     }
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
     }
+
   /* USER CODE END 3 */
 
 
@@ -590,7 +594,7 @@ static void MX_TIM2_Init(void)
   htim2.Instance = TIM2;
   htim2.Init.Prescaler = 16000;
   htim2.Init.CounterMode = TIM_COUNTERMODE_UP;
-  htim2.Init.Period = 60000;
+  htim2.Init.Period = 5000;
   htim2.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
   htim2.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
   if (HAL_TIM_Base_Init(&htim2) != HAL_OK)
@@ -694,28 +698,9 @@ static void MX_GPIO_Init(void)
   __HAL_RCC_GPIOF_CLK_ENABLE();
   __HAL_RCC_GPIOA_CLK_ENABLE();
   __HAL_RCC_GPIOB_CLK_ENABLE();
-  __HAL_RCC_GPIOD_CLK_ENABLE();
 
   /*Configure GPIO pin Output Level */
   HAL_GPIO_WritePin(GPIOA, GPIO_PIN_4, GPIO_PIN_RESET);
-
-  /*Configure GPIO pins : PF2 PF3 */
-  GPIO_InitStruct.Pin = GPIO_PIN_2|GPIO_PIN_3;
-  GPIO_InitStruct.Mode = GPIO_MODE_ANALOG;
-  GPIO_InitStruct.Pull = GPIO_NOPULL;
-  HAL_GPIO_Init(GPIOF, &GPIO_InitStruct);
-
-  /*Configure GPIO pins : PC0 PC1 PC2 PC3
-                           PC4 PC5 PC6 PC7
-                           PC8 PC9 PC10 PC11
-                           PC12 */
-  GPIO_InitStruct.Pin = GPIO_PIN_0|GPIO_PIN_1|GPIO_PIN_2|GPIO_PIN_3
-                          |GPIO_PIN_4|GPIO_PIN_5|GPIO_PIN_6|GPIO_PIN_7
-                          |GPIO_PIN_8|GPIO_PIN_9|GPIO_PIN_10|GPIO_PIN_11
-                          |GPIO_PIN_12;
-  GPIO_InitStruct.Mode = GPIO_MODE_ANALOG;
-  GPIO_InitStruct.Pull = GPIO_NOPULL;
-  HAL_GPIO_Init(GPIOC, &GPIO_InitStruct);
 
   /*Configure GPIO pin : PA4 */
   GPIO_InitStruct.Pin = GPIO_PIN_4;
@@ -723,34 +708,6 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
   HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
-
-  /*Configure GPIO pins : PA5 PA6 PA7 PA8
-                           PA9 PA10 PA11 PA12
-                           PA15 */
-  GPIO_InitStruct.Pin = GPIO_PIN_5|GPIO_PIN_6|GPIO_PIN_7|GPIO_PIN_8
-                          |GPIO_PIN_9|GPIO_PIN_10|GPIO_PIN_11|GPIO_PIN_12
-                          |GPIO_PIN_15;
-  GPIO_InitStruct.Mode = GPIO_MODE_ANALOG;
-  GPIO_InitStruct.Pull = GPIO_NOPULL;
-  HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
-
-  /*Configure GPIO pins : PB0 PB1 PB2 PB10
-                           PB11 PB12 PB13 PB14
-                           PB15 PB3 PB4 PB5
-                           PB6 PB7 */
-  GPIO_InitStruct.Pin = GPIO_PIN_0|GPIO_PIN_1|GPIO_PIN_2|GPIO_PIN_10
-                          |GPIO_PIN_11|GPIO_PIN_12|GPIO_PIN_13|GPIO_PIN_14
-                          |GPIO_PIN_15|GPIO_PIN_3|GPIO_PIN_4|GPIO_PIN_5
-                          |GPIO_PIN_6|GPIO_PIN_7;
-  GPIO_InitStruct.Mode = GPIO_MODE_ANALOG;
-  GPIO_InitStruct.Pull = GPIO_NOPULL;
-  HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
-
-  /*Configure GPIO pin : PD2 */
-  GPIO_InitStruct.Pin = GPIO_PIN_2;
-  GPIO_InitStruct.Mode = GPIO_MODE_ANALOG;
-  GPIO_InitStruct.Pull = GPIO_NOPULL;
-  HAL_GPIO_Init(GPIOD, &GPIO_InitStruct);
 
   /*Configure GPIO pins : I2C1_SCL_Pin I2C1_SDA_Pin */
   GPIO_InitStruct.Pin = I2C1_SCL_Pin|I2C1_SDA_Pin;
@@ -851,6 +808,7 @@ uint8_t estimer_pourcentage_batterie(float v_bat_reel) {
             // à chaque fois que la minute est écoulée. Elle sert juste à valider le réveil.
         }
     }
+/* - V1 de fonction dodo
     void Aller_Au_Dodo(void)
     {
     //On coupe l'ADC pour qu'il arrête de consommer
@@ -871,7 +829,17 @@ uint8_t estimer_pourcentage_batterie(float v_bat_reel) {
    // On coupe le SysTick (l'horloge interne de 1ms qui empêcherait le dodo)
         HAL_SuspendTick();
 
-   // On démarre notre alarme (le TIM2 va compter 1 minute)
+  //Nettoyage pour éviter blocage
+   //vide de force la boîte aux lettres du TIM2 avant de dormir
+        __HAL_TIM_CLEAR_FLAG(&htim2, TIM_FLAG_UPDATE);
+
+   // On force le processeur à oublier l'interruption passée du TIM2
+         HAL_NVIC_ClearPendingIRQ(TIM2_IRQn);
+
+   // On force le processeur à oublier l'interruption passée du SysTick
+         HAL_NVIC_ClearPendingIRQ(SysTick_IRQn);
+
+         // On démarre notre alarme (le TIM2 va compter 1 minute)
         HAL_TIM_Base_Start_IT(&htim2);
 
    // LE PROCESSEUR PLONGE EN MODE SLEEP
@@ -885,7 +853,61 @@ uint8_t estimer_pourcentage_batterie(float v_bat_reel) {
   //On réactive le SysTick pour que le système reprenne son cours normal
         HAL_ResumeTick();
     }
+*/
+    void Aller_Au_Dodo(void)
+    {
+    // On coupe proprement les périphériques gourmands
+       HAL_ADC_Stop_DMA(&hadc1);
+       HAL_DAC_Stop(&hdac1, DAC_CHANNEL_1); // Éteint le DAC1
+       HAL_UART_DeInit(&huart2);
+       HAL_GPIO_WritePin(GPIOA, GPIO_PIN_4, GPIO_PIN_RESET); // Éteint le pont diviseur
 
+    //-- Sauvegarde et basculement des pates en analogique
+
+    //On sauvegarde l'état exact de la configuration de CubeMX (les registres MODER)
+       uint32_t save_GPIOA_MODER = GPIOA->MODER;
+       uint32_t save_GPIOB_MODER = GPIOB->MODER;
+       uint32_t save_GPIOC_MODER = GPIOC->MODER;
+
+    //Structure de configuration pour forcer le mode analogique
+       GPIO_InitTypeDef GPIO_Blank_InitStruct = {0};
+       GPIO_Blank_InitStruct.Pin = 0xFFFF; // <--- Cible toutes les broches de 0 à 15 d'un coup
+       GPIO_Blank_InitStruct.Mode = GPIO_MODE_ANALOG;
+       GPIO_Blank_InitStruct.Pull = GPIO_NOPULL;
+
+    //On applique le mode analogique sur TOUS les ports de la puce
+    //Coupe buffers numériques
+       HAL_GPIO_Init(GPIOA, &GPIO_Blank_InitStruct);
+       HAL_GPIO_Init(GPIOB, &GPIO_Blank_InitStruct);
+       HAL_GPIO_Init(GPIOC, &GPIO_Blank_InitStruct);
+
+    //-- Phase Sommeil
+       HAL_SuspendTick();
+       SysTick->CTRL &= ~SysTick_CTRL_TICKINT_Msk; // Coupe l'interruption physique SysTick
+
+       __HAL_TIM_CLEAR_FLAG(&htim2, TIM_FLAG_UPDATE);
+       HAL_NVIC_ClearPendingIRQ(TIM2_IRQn);
+       HAL_NVIC_ClearPendingIRQ(SysTick_IRQn);
+
+   // On démarre le timer pour 1 minute
+       HAL_TIM_Base_Start_IT(&htim2);
+
+  // LE CPU ENTRE EN MODE SLEEP
+       HAL_PWR_EnterSLEEPMode(PWR_MAINREGULATOR_ON, PWR_SLEEPENTRY_WFI);
+
+  //-- Reveil avec TIM2
+       HAL_TIM_Base_Stop_IT(&htim2);
+
+ // RESTAURATION MATÉRIELLE : On remet les registres MODER d'origine
+ // En une fraction de microseconde, tes broches redeviennent l'ADC, l'UART, le SWD, etc.
+      GPIOA->MODER = save_GPIOA_MODER;
+      GPIOB->MODER = save_GPIOB_MODER;
+      GPIOC->MODER = save_GPIOC_MODER;
+
+// On réactive le SysTick pour la suite du programme
+     SysTick->CTRL |= SysTick_CTRL_TICKINT_Msk;
+     HAL_ResumeTick();
+    }
 /* USER CODE END 4 */
 
 /**
@@ -900,9 +922,9 @@ void Error_Handler(void)
   while (1)
   {
   }
-
-  /* USER CODE END Error_Handler_Debug */
 }
+  /* USER CODE END Error_Handler_Debug */
+
 
 #ifdef  USE_FULL_ASSERT
 /**
