@@ -420,7 +420,7 @@ int main(void)
     }
 
   /* USER CODE END 3 */
-
+}
 
 /**
   * @brief System Clock Configuration
@@ -874,7 +874,7 @@ uint8_t estimer_pourcentage_batterie(float v_bat_reel) {
        GPIO_Blank_InitStruct.Pin = 0xFFFF; // <--- Cible toutes les broches de 0 à 15 d'un coup
        GPIO_Blank_InitStruct.Mode = GPIO_MODE_ANALOG;
        GPIO_Blank_InitStruct.Pull = GPIO_NOPULL;
-
+//
     //On applique le mode analogique sur TOUS les ports de la puce
     //Coupe buffers numériques
        HAL_GPIO_Init(GPIOA, &GPIO_Blank_InitStruct);
@@ -924,7 +924,7 @@ void Error_Handler(void)
   }
 }
   /* USER CODE END Error_Handler_Debug */
-
+}
 
 #ifdef  USE_FULL_ASSERT
 /**
