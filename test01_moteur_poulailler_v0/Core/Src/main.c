@@ -281,38 +281,69 @@ if (HAL_LPTIM_PWM_Start(&hlptim1, LPTIM_CHANNEL_1) != HAL_OK)
          }
      }
      // 3. MODE VEILLE (SI MOTEUR OFF)
-     else
+          else
           {
               // Message pour confirmer l'entrée en veille
               HAL_UART_Transmit(&huart2, (uint8_t*)"Moteur OFF - Sleep Mode...\r\n", 28, 50);
 
-              // 1. On vide le registre de réception au cas où un résidu traîne
+              // 1. Flush et nettoyage de l'UART2
               __HAL_UART_FLUSH_DRREGISTER(&huart2);
-
-              // 2. On nettoie TOUS les drapeaux d'erreurs (Overrun, Noise, etc.)
               __HAL_UART_CLEAR_FLAG(&huart2, UART_CLEAR_OREF | UART_CLEAR_NEF | UART_CLEAR_FEF);
 
-              // 3. On s'assure que l'interruption RX est bien armée pour servir de réveil
+              // 2. On arme l'interruption RX pour le réveil
               __HAL_UART_ENABLE_IT(&huart2, UART_IT_RXNE);
 
-              // === AJOUT CORRECTION ===
-              // 4. On bloque l'accès aux routines ISR de ST (évite la tempête d'IT)
-              // Le matériel réveillera quand même le CPU du mode sleep, mais sans dévier le code.
+              // ====================================================================
+              // CONFIGURATION ANALOGIQUE SUR-MESURE
+              // ====================================================================
+              GPIO_InitTypeDef GPIO_InitStruct = {0};
+              GPIO_InitStruct.Mode = GPIO_MODE_ANALOG;
+              GPIO_InitStruct.Pull = GPIO_NOPULL;
+
+              // --- PORT A ---
+              // On passe tout en Analogique SAUF :
+              // PA2 & PA3 (UART2), PA13 & PA14 (SWD de débogage), PA11 (TIM1_CH4 / ARRIERE)
+              // PA7 (ADC / I_MOT) et PA9 (NSLEEP si besoin de maintenir l'état, sinon à enlever)
+              GPIO_InitStruct.Pin = GPIO_PIN_ALL & ~(GPIO_PIN_2 | GPIO_PIN_3 | GPIO_PIN_13 | GPIO_PIN_14 | GPIO_PIN_11 | GPIO_PIN_7 | GPIO_PIN_9);
+              HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
+
+              // --- PORT B ---
+              // On passe tout en Analogique SAUF :
+              // PB2 (LPTIM1 / AVANT), PB8 & PB9 (I2C1 si utilisé/tiré pour un écran ou capteur extérieur)
+              GPIO_InitStruct.Pin = GPIO_PIN_ALL & ~(GPIO_PIN_2 | GPIO_PIN_8 | GPIO_PIN_9);
+              HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
+
+              // --- PORT C ---
+              // On passe tout en Analogique SAUF :
+              // PC13 ([BUTTON] / Réveil manuel éventuel)
+              GPIO_InitStruct.Pin = GPIO_PIN_ALL & ~(GPIO_PIN_13);
+              HAL_GPIO_Init(GPIOC, &GPIO_InitStruct);
+              // ====================================================================
+
+              // 4. Blocage des routines ISR automatiques
               __disable_irq();
 
-              HAL_SuspendTick(); // On suspend le Systick pour éviter un réveil toutes les 1ms
+              HAL_SuspendTick(); // Coupe le Systick (évite le réveil toutes les 1ms)
               HAL_PWR_EnterSLEEPMode(PWR_MAINREGULATOR_ON, PWR_SLEEPENTRY_WFI);
 
-              /* --- LE CODE REPREND ICI MATÉRIELLEMENT AU PREMIER CARACTÈRE --- */
+              /* --- LE CODE REPREND ICI AU PREMIER CARACTÈRE DE L'UART --- */
               HAL_ResumeTick();
 
-              // 5. On coupe immédiatement l'interruption périphérique avant de réouvrir les vannes
+              // 5. On coupe l'IT RXNE
               __HAL_UART_DISABLE_IT(&huart2, UART_IT_RXNE);
 
-              // 6. On réautorise les interruptions globales en toute sécurité
+              // 6. On réactive les IRQ globales
               __enable_irq();
 
-              // Optionnel : message au réveil
+              // ====================================================================
+              // RESTAURATION DE LA CONFIGURATION D'ORIGINE
+              // ====================================================================
+              // Rappel de la fonction CubeMX pour restaurer les configurations de tes
+              // broches moteurs (AVANT, ARRIERE), les LEDS, l'ADC, etc.
+              MX_GPIO_Init();
+              // ====================================================================
+
+              // Message au réveil
               HAL_UART_Transmit(&huart2, (uint8_t*)"Assalam aleykoum wa rahmatoullah wa barakatouh !\r\n", 50, 10);
               HAL_Delay(10);
           }
