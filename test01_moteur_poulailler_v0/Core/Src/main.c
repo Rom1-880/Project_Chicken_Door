@@ -31,22 +31,28 @@
 /* USER CODE BEGIN PM */
 /* USER CODE END PM */
 /* Private variables ---------------------------------------------------------*/
+
 ADC_HandleTypeDef hadc1;
 LPTIM_HandleTypeDef hlptim1;
 TIM_HandleTypeDef htim1;
 UART_HandleTypeDef huart2;
+
 /* USER CODE BEGIN PV */
+
 uint16_t current_speed = 900; // On fixe une vitesse par défaut pour les tests
 uint8_t rx_data;              // Variable pour stocker le caractère reçu
 char msg[100];
+
 // lecture courant moteur
 uint32_t adc_value = 0;
 float courant_moteur = 0.0;
 uint32_t last_tick = 0; // Pour l'envoi périodique
+
 // moyenne courant moteur
 float lecture[5] = {0.0f, 0.0f, 0.0f, 0.0f, 0.0f};
 float somme_courant = 0.0f;
 float moyenne_courant = 0.0f;
+
 // sécurité courant
 float courant_fonctionnement_morteur = 0.0f; // courant de fonctionnement normal du moteur
 float threshold = 0.9f; // limite définie
@@ -264,10 +270,10 @@ if (HAL_LPTIM_PWM_Start(&hlptim1, LPTIM_CHANNEL_1) != HAL_OK)
                  }
              }
              // Envoie Liaison série (Tes commentaires et ta trame exacte)
-             int len = sprintf(msg, "I:%.3fA \r\n|threshold:%.3fA| courant_fonctionnement:%.3fA \r\n|counter :%d |Stat:%d TIMER:%lu ms\r\n",
+             int len = sprintf(msg, "I:%.3fA | courant_fonctionnement:%.3fA \r\n|threshold:%.3fA|counter :%d |Etat :%d \r\n TIMER:%lu ms\r\n",
                                  moyenne_courant,
+								 courant_fonctionnement_morteur,
                                  threshold,
-                                 courant_fonctionnement_morteur,
                                  compteur_securite,
                                  (int)motor_state,
                                  elapsed);
@@ -305,7 +311,6 @@ if (HAL_LPTIM_PWM_Start(&hlptim1, LPTIM_CHANNEL_1) != HAL_OK)
 
               // 6. On réautorise les interruptions globales en toute sécurité
               __enable_irq();
-              // ========================
 
               // Optionnel : message au réveil
               HAL_UART_Transmit(&huart2, (uint8_t*)"Assalam aleykoum wa rahmatoullah wa barakatouh !\r\n", 50, 10);
