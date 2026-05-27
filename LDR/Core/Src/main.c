@@ -394,7 +394,7 @@ int main(void)
 */
     // DEBUT DE LA VEILLE DE X MINUTES (X x 1 Minute)
      compteur_minutes = 0;
-     while (compteur_minutes < 1 ) // 60 cycles x 10 secondes = 600 secondes = 10 minutes
+     while (compteur_minutes < 3 ) // 60 cycles x 10 secondes = 600 secondes = 10 minutes
     	 // 6 cycle = 1 minutes --> 1 cycle = 10 secondes
      	 {
     	 Aller_Au_Dodo(); // Le CPU dort pendant 1 minute, puis se réveille ici
@@ -865,6 +865,10 @@ uint8_t estimer_pourcentage_batterie(float v_bat_reel) {
     	    HAL_UART_DeInit(&huart2);             // Désactive la logique de l'UART2
     	    __HAL_RCC_USART2_CLK_DISABLE();       // Coupe l'horloge matérielle de l'UART2
 
+    	    // --- EXTINCTION PROPRE DE LA LIAISON SÉRIE ---
+    	    HAL_UART_DeInit(&huart2);             // Démonte l'UART2
+    	    __HAL_RCC_USART2_CLK_DISABLE();       // Coupe l'horloge de l'UART2
+
     	    // Extinction physique du pont diviseur de batterie (PA4 à 0V)
     	    HAL_GPIO_WritePin(GPIOA, GPIO_PIN_4, GPIO_PIN_RESET);
 
@@ -914,8 +918,13 @@ uint8_t estimer_pourcentage_batterie(float v_bat_reel) {
     	    // On applique le bit de division par 16 sur le prédiviseur AHB (HPRE)
     	    MODIFY_REG(RCC->CFGR, RCC_CFGR_HPRE, RCC_CFGR_HPRE_3);
 
+/*
     	    // LE PROCESSEUR S'ENDORT ICI EN MODE SLEEP NORMAL
     	    HAL_PWR_EnterSLEEPMode(PWR_MAINREGULATOR_ON, PWR_SLEEPENTRY_WFI);
+*/
+    	    // On demande au microcontrôleur de basculer sur son régulateur basse consommation.
+    	    // La HAL va automatiquement brider l'architecture interne pour économiser l'énergie.
+    	    HAL_PWR_EnterSLEEPMode(PWR_LOWPOWERREGULATOR_ON, PWR_SLEEPENTRY_WFI);
 
     	    // --- LE CPU DORT ICI ---
 
