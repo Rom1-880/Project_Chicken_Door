@@ -394,7 +394,8 @@ int main(void)
 */
     // DEBUT DE LA VEILLE DE X MINUTES (X x 1 Minute)
      compteur_minutes = 0;
-     while (compteur_minutes < 3 ) // la pour 10 minutes
+     while (compteur_minutes < 1 ) // 60 cycles x 10 secondes = 600 secondes = 10 minutes
+    	 // 6 cycle = 1 minutes --> 1 cycle = 10 secondes
      	 {
     	 Aller_Au_Dodo(); // Le CPU dort pendant 1 minute, puis se réveille ici
 
@@ -420,7 +421,7 @@ int main(void)
     }
 
   /* USER CODE END 3 */
-}
+
 
 /**
   * @brief System Clock Configuration
@@ -856,57 +857,91 @@ uint8_t estimer_pourcentage_batterie(float v_bat_reel) {
 */
     void Aller_Au_Dodo(void)
     {
-    // On coupe proprement les périphériques gourmands
-       HAL_ADC_Stop_DMA(&hadc1);
-       HAL_DAC_Stop(&hdac1, DAC_CHANNEL_1); // Éteint le DAC1
-       HAL_UART_DeInit(&huart2);
-       HAL_GPIO_WritePin(GPIOA, GPIO_PIN_4, GPIO_PIN_RESET); // Éteint le pont diviseur
 
-    //-- Sauvegarde et basculement des pates en analogique
+    	    // 1. EXTINCTION DES PÉRIPHÉRIQUES GOURMANDS
 
-    //On sauvegarde l'état exact de la configuration de CubeMX (les registres MODER)
-       uint32_t save_GPIOA_MODER = GPIOA->MODER;
-       uint32_t save_GPIOB_MODER = GPIOB->MODER;
-       uint32_t save_GPIOC_MODER = GPIOC->MODER;
+    	    HAL_ADC_Stop_DMA(&hadc1);             // Coupe le convertisseur ADC et le DMA
+    	    HAL_DAC_Stop(&hdac1, DAC_CHANNEL_1);  // Coupe le DAC pour économiser de l'énergie
+    	    HAL_UART_DeInit(&huart2);             // Désactive la logique de l'UART2
+    	    __HAL_RCC_USART2_CLK_DISABLE();       // Coupe l'horloge matérielle de l'UART2
 
-    //Structure de configuration pour forcer le mode analogique
-       GPIO_InitTypeDef GPIO_Blank_InitStruct = {0};
-       GPIO_Blank_InitStruct.Pin = 0xFFFF; // <--- Cible toutes les broches de 0 à 15 d'un coup
-       GPIO_Blank_InitStruct.Mode = GPIO_MODE_ANALOG;
-       GPIO_Blank_InitStruct.Pull = GPIO_NOPULL;
-//
-    //On applique le mode analogique sur TOUS les ports de la puce
-    //Coupe buffers numériques
-       HAL_GPIO_Init(GPIOA, &GPIO_Blank_InitStruct);
-       HAL_GPIO_Init(GPIOB, &GPIO_Blank_InitStruct);
-       HAL_GPIO_Init(GPIOC, &GPIO_Blank_InitStruct);
+    	    // Extinction physique du pont diviseur de batterie (PA4 à 0V)
+    	    HAL_GPIO_WritePin(GPIOA, GPIO_PIN_4, GPIO_PIN_RESET);
 
-    //-- Phase Sommeil
-       HAL_SuspendTick();
-       SysTick->CTRL &= ~SysTick_CTRL_TICKINT_Msk; // Coupe l'interruption physique SysTick
 
-       __HAL_TIM_CLEAR_FLAG(&htim2, TIM_FLAG_UPDATE);
-       HAL_NVIC_ClearPendingIRQ(TIM2_IRQn);
-       HAL_NVIC_ClearPendingIRQ(SysTick_IRQn);
+    	    // 2. CONFIGURATION DES BROCHES EN MODE BASSE CONSOMMATION
 
-   // On démarre le timer pour 1 minute
-       HAL_TIM_Base_Start_IT(&htim2);
 
-  // LE CPU ENTRE EN MODE SLEEP
-       HAL_PWR_EnterSLEEPMode(PWR_MAINREGULATOR_ON, PWR_SLEEPENTRY_WFI);
+    	    // Sauvegarde instantanée de la configuration actuelle de CubeMX
+    	    uint32_t save_GPIOA_MODER = GPIOA->MODER;
+    	    uint32_t save_GPIOB_MODER = GPIOB->MODER;
+    	    uint32_t save_GPIOC_MODER = GPIOC->MODER;
 
-  //-- Reveil avec TIM2
-       HAL_TIM_Base_Stop_IT(&htim2);
+    	    // Configuration du moule pour verrouiller les broches à la masse
+    	    GPIO_InitTypeDef GPIO_Blank_InitStruct = {0};
+    	    GPIO_Blank_InitStruct.Mode = GPIO_MODE_ANALOG;
+    	    GPIO_Blank_InitStruct.Pull = GPIO_NOPULL; // Déconnecte complètement la broche
+    	    //GPIO_Blank_InitStruct.Pull = GPIO_PULLDOWN; // Bloque les fuites de courant vers la masse
 
- // RESTAURATION MATÉRIELLE : On remet les registres MODER d'origine
- // En une fraction de microseconde, tes broches redeviennent l'ADC, l'UART, le SWD, etc.
-      GPIOA->MODER = save_GPIOA_MODER;
-      GPIOB->MODER = save_GPIOB_MODER;
-      GPIOC->MODER = save_GPIOC_MODER;
 
-// On réactive le SysTick pour la suite du programme
-     SysTick->CTRL |= SysTick_CTRL_TICKINT_Msk;
-     HAL_ResumeTick();
+    	    // --- PORT A : On isole tout sauf PA13 et PA14 (Broches de programmation SWD) ---
+    	    GPIO_Blank_InitStruct.Pin = GPIO_PIN_ALL ^ (GPIO_PIN_13 | GPIO_PIN_14);
+    	    //GPIO_Blank_InitStruct.Pin = 0x9FFF;
+    	    HAL_GPIO_Init(GPIOA, &GPIO_Blank_InitStruct);
+
+    	    // --- PORTS B & C : Isolation totale de toutes les broches ---
+    	    GPIO_Blank_InitStruct.Pin = GPIO_PIN_ALL;
+    	    HAL_GPIO_Init(GPIOB, &GPIO_Blank_InitStruct);
+    	    HAL_GPIO_Init(GPIOC, &GPIO_Blank_InitStruct);
+
+
+    	    // 3. ENTRÉE EN MODE SLEEP AVEC RALENTISSEMENT DE L'HORLOGE
+
+    	    HAL_SuspendTick();                          // Suspend le compteur logiciel de HAL
+    	    SysTick->CTRL &= ~SysTick_CTRL_TICKINT_Msk; // Coupe l'interruption matérielle SysTick (1ms)
+
+    	    // Nettoyage des drapeaux d'interruption pour éviter un réveil immédiat
+    	    __HAL_TIM_CLEAR_FLAG(&htim2, TIM_FLAG_UPDATE);
+    	    HAL_NVIC_ClearPendingIRQ(TIM2_IRQn);
+    	    HAL_NVIC_ClearPendingIRQ(SysTick_IRQn);
+
+    	    // On arme l'alarme (TIM2) pour 1 minute
+    	    HAL_TIM_Base_Start_IT(&htim2);
+
+
+    	    /*  OPTIMISATION FREQUENCE : Passage de 16 MHz à 1 MHz               */
+
+    	    // On applique le bit de division par 16 sur le prédiviseur AHB (HPRE)
+    	    MODIFY_REG(RCC->CFGR, RCC_CFGR_HPRE, RCC_CFGR_HPRE_3);
+
+    	    // LE PROCESSEUR S'ENDORT ICI EN MODE SLEEP NORMAL
+    	    HAL_PWR_EnterSLEEPMode(PWR_MAINREGULATOR_ON, PWR_SLEEPENTRY_WFI);
+
+    	    // --- LE CPU DORT ICI ---
+
+
+    	    /*   RETOUR À LA NORMALE : Remonte instantanément à 16 MHz            */
+
+    	    // On remet le prédiviseur à 0 (Pas de division -> Vitesse maximale)
+    	    MODIFY_REG(RCC->CFGR, RCC_CFGR_HPRE, 0x00000000U);
+
+    	    // 4. PHASE DE RÉVEIL (Exécutée dès que le TIM2 a fini de compter)
+
+    	    HAL_TIM_Base_Stop_IT(&htim2); // Désactive l'alarme du timer
+
+    	    // RESTAURATION MATÉRIELLE : Remet les broches comme CubeMX les voulait
+    	    GPIOA->MODER = save_GPIOA_MODER;
+    	    GPIOB->MODER = save_GPIOB_MODER;
+    	    GPIOC->MODER = save_GPIOC_MODER;
+
+    	    // Rallume l'horloge de l'UART pour lui permettre de redémarrer proprement
+    	    __HAL_RCC_USART2_CLK_ENABLE();
+
+    	    MX_USART2_UART_Init(); // redemarage de l'UART
+
+    	    // Relance l'horloge interne de base du système (SysTick)
+    	    SysTick->CTRL |= SysTick_CTRL_TICKINT_Msk;
+    	    HAL_ResumeTick();
     }
 /* USER CODE END 4 */
 
@@ -924,7 +959,7 @@ void Error_Handler(void)
   }
 }
   /* USER CODE END Error_Handler_Debug */
-}
+
 
 #ifdef  USE_FULL_ASSERT
 /**
