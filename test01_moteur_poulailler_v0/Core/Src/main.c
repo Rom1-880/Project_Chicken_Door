@@ -693,6 +693,63 @@ static void MX_GPIO_Init(void)
 /* USER CODE BEGIN 4 */
 
 /* ---------------------------------------------------------------------------
+ * Clock_SwitchToSleep
+ * Réduit l'horloge MSI de 48 MHz → 4 MHz avant la mise en veille.
+ * Séquence obligatoire : fréquence d'abord, tension ensuite.
+ *   - À 4 MHz, 0 wait state flash suffit (LATENCY_0)
+ *   - SCALE2 (Vcore 1.0V) autorisé seulement sous 26 MHz
+ *   - HAL_UART_Init relit la fréquence PCLK et recalcule le BRR → 115200 baud reste valide
+ * --------------------------------------------------------------------------- */
+static void Clock_SwitchToSleep(void)
+{
+    // 1. Flash en 0 wait state : valide jusqu'à ~16 MHz selon Vcore
+    __HAL_FLASH_SET_LATENCY(FLASH_LATENCY_0);
+
+    // 2. Descente du MSI à 4 MHz (MSIRANGE_6)
+    RCC_OscInitTypeDef osc = {0};
+    osc.OscillatorType      = RCC_OSCILLATORTYPE_MSI;
+    osc.MSIState            = RCC_MSI_ON;
+    osc.MSICalibrationValue = RCC_MSICALIBRATION_DEFAULT;
+    osc.MSIClockRange       = RCC_MSIRANGE_6; // 4 MHz
+    osc.PLL.PLLState        = RCC_PLL_NONE;
+    HAL_RCC_OscConfig(&osc);
+
+    // 3. Passage en SCALE2 (Vcore 1.0V) : seulement APRÈS la réduction de fréquence
+    //    Inverser l'ordre risque une instabilité CPU à haute fréquence sous-alimenté
+    HAL_PWREx_ControlVoltageScaling(PWR_REGULATOR_VOLTAGE_SCALE2);
+
+    // 4. Recalcule le BRR UART pour 115200 baud @ 4 MHz PCLK
+    //    HAL_UART_Init lit HAL_RCC_GetPCLK1Freq() automatiquement → pas de magic number
+    HAL_UART_Init(&huart2);
+}
+
+/* ---------------------------------------------------------------------------
+ * Clock_SwitchToFullSpeed
+ * Restaure MSI à 48 MHz et Vcore en SCALE1 après le réveil.
+ * Séquence obligatoire : tension d'abord, fréquence ensuite.
+ * --------------------------------------------------------------------------- */
+static void Clock_SwitchToFullSpeed(void)
+{
+    // 1. Remontée en SCALE1 (Vcore 1.2V) obligatoire AVANT de dépasser 26 MHz
+    HAL_PWREx_ControlVoltageScaling(PWR_REGULATOR_VOLTAGE_SCALE1);
+
+    // 2. Remontée du MSI à 48 MHz (MSIRANGE_11)
+    RCC_OscInitTypeDef osc = {0};
+    osc.OscillatorType      = RCC_OSCILLATORTYPE_MSI;
+    osc.MSIState            = RCC_MSI_ON;
+    osc.MSICalibrationValue = RCC_MSICALIBRATION_DEFAULT;
+    osc.MSIClockRange       = RCC_MSIRANGE_11; // 48 MHz
+    osc.PLL.PLLState        = RCC_PLL_NONE;
+    HAL_RCC_OscConfig(&osc);
+
+    // 3. Restore la latence flash pour 48 MHz (même valeur que SystemClock_Config)
+    __HAL_FLASH_SET_LATENCY(FLASH_LATENCY_1);
+
+    // 4. Recalcule le BRR UART pour 115200 baud @ 48 MHz PCLK
+    HAL_UART_Init(&huart2);
+}
+
+/* ---------------------------------------------------------------------------
  * Enter_Low_Power_Mode
  * Séquence complète de mise en veille et restauration :
  *   1. Purge UART → évite un réveil immédiat sur flag résiduel
@@ -715,12 +772,7 @@ void Enter_Low_Power_Mode(void)
     volatile uint32_t tmpreg = huart2.Instance->RDR; // Vide le registre de données
     (void)tmpreg;                                     // Supprime le warning "variable non utilisée"
 
-    /* 2. Lance une réception IT 1 octet : HAL stocke l'octet dans rx_data et appelle
-     *    HAL_UART_RxCpltCallback → rx_pending = 1.
-     *    Sans ça, le HAL IRQ Handler lirait et JETTERAIT l'octet de réveil. */
-    HAL_UART_Receive_IT(&huart2, &rx_data, 1);
-
-    /* 3. Pins inutiles en ANALOG → supprime les courants de fuite entre VDD et GND */
+    /* 2. Pins inutiles en ANALOG → supprime les courants de fuite entre VDD et GND */
     GPIO_InitTypeDef GPIO_InitStruct = {0};
     GPIO_InitStruct.Mode = GPIO_MODE_ANALOG;
     GPIO_InitStruct.Pull = GPIO_NOPULL;
@@ -734,12 +786,22 @@ void Enter_Low_Power_Mode(void)
     HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
     HAL_GPIO_Init(GPIOC, &GPIO_InitStruct);
 
-    /* 4. Coupe les horloges périphériques non nécessaires en veille */
+    /* 3. Coupe les horloges périphériques non nécessaires en veille */
     __HAL_RCC_TIM1_CLK_DISABLE();
     __HAL_RCC_LPTIM1_CLK_DISABLE();
     __HAL_RCC_ADC_CLK_DISABLE();
 
-    /* 5. Suspend le SysTick : sans ça, le CPU se réveillerait toutes les 1 ms */
+    /* 4. Réduction clock + tension EN PREMIER : MSI 48 MHz → 4 MHz, SCALE1 → SCALE2
+     *    HAL_UART_Init() à l'intérieur recalcule le BRR pour 115200 baud @ 4 MHz.
+     *    DOIT être fait AVANT HAL_UART_Receive_IT, car HAL_UART_Init réinitialise
+     *    complètement l'UART et efface RXNEIE — ce qui annulerait l'IT de réveil. */
+    Clock_SwitchToSleep();
+
+    /* 5. Setup de la réception IT : APRÈS Clock_SwitchToSleep pour ne pas être annulé.
+     *    HAL stocke l'octet dans rx_data et appelle HAL_UART_RxCpltCallback → rx_pending = 1. */
+    HAL_UART_Receive_IT(&huart2, &rx_data, 1);
+
+    /* 6. Suspend le SysTick : sans ça, le CPU se réveillerait toutes les 1 ms */
     HAL_SuspendTick();
 
     // Le CPU s'arrête ICI jusqu'à réception d'un caractère sur UART2
@@ -751,12 +813,16 @@ void Enter_Low_Power_Mode(void)
 
     HAL_ResumeTick(); // Relance le SysTick (HAL_GetTick() redevient fiable)
 
-    /* 6. Réactive les horloges périphériques */
+    /* 7. Restaure clock + tension : 4 MHz → 48 MHz, SCALE2 → SCALE1
+     *    Doit se faire AVANT de relancer TIM1/LPTIM1 qui ont été configurés pour 48 MHz */
+    Clock_SwitchToFullSpeed();
+
+    /* 8. Réactive les horloges périphériques */
     __HAL_RCC_TIM1_CLK_ENABLE();
     __HAL_RCC_LPTIM1_CLK_ENABLE();
     __HAL_RCC_ADC_CLK_ENABLE();
 
-    /* 7. Restaure les GPIOs et les périphériques dans leur état de fonctionnement normal */
+    /* 9. Restaure les GPIOs et les périphériques dans leur état de fonctionnement normal */
     MX_GPIO_Init();    // Remet les GPIOs en mode AF/Analogique selon leur fonction
     MX_TIM1_Init();    // Reconfigure TIM1 (perdu pendant la veille)
     MX_LPTIM1_Init();  // Reconfigure LPTIM1
@@ -766,7 +832,7 @@ void Enter_Low_Power_Mode(void)
     HAL_TIM_PWM_Start(&htim1, TIM_CHANNEL_4);
     __HAL_TIM_MOE_ENABLE(&htim1); // Réactive la sortie principale de TIM1
 
-    /* 8. HAL_UART_Receive_IT désactive l'IT automatiquement après réception —
+    /* 10. HAL_UART_Receive_IT désactive l'IT automatiquement après réception —
      *    rien à faire ici, on repasse en polling via Process_UART_Command. */
 
     HAL_UART_Transmit(&huart2, (uint8_t*)"Reveil OK !\r\n", 13, 50);

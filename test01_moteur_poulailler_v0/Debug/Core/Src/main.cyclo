@@ -18,5 +18,7 @@
 ../Core/Src/main.c:574:13:MX_TIM1_Init	5
 ../Core/Src/main.c:635:13:MX_USART2_UART_Init	5
 ../Core/Src/main.c:668:13:MX_GPIO_Init	1
-../Core/Src/main.c:707:6:Enter_Low_Power_Mode	1
-../Core/Src/main.c:781:6:Error_Handler	1
+../Core/Src/main.c:703:13:Clock_SwitchToSleep	1
+../Core/Src/main.c:731:13:Clock_SwitchToFullSpeed	1
+../Core/Src/main.c:764:6:Enter_Low_Power_Mode	1
+../Core/Src/main.c:847:6:Error_Handler	1
