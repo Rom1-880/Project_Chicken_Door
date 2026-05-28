@@ -64,7 +64,7 @@ DMA_HandleTypeDef hdma_adc1;
 
 DAC_HandleTypeDef hdac1;
 
-TIM_HandleTypeDef htim2;
+RTC_HandleTypeDef hrtc;
 
 UART_HandleTypeDef huart2;
 
@@ -136,7 +136,7 @@ static void MX_DMA_Init(void);
 static void MX_USART2_UART_Init(void);
 static void MX_ADC1_Init(void);
 static void MX_DAC1_Init(void);
-static void MX_TIM2_Init(void);
+static void MX_RTC_Init(void);
 /* USER CODE BEGIN PFP */
 uint8_t estimer_pourcentage_batterie(float v_bat_reel); // car besoin d'un prototype pour le pourcentage
 
@@ -186,7 +186,7 @@ int main(void)
   MX_USART2_UART_Init();
   MX_ADC1_Init();
   MX_DAC1_Init();
-  MX_TIM2_Init();
+  MX_RTC_Init();
   /* USER CODE BEGIN 2 */
   HAL_ADCEx_Calibration_Start(&hadc1);
   HAL_GPIO_WritePin(GPIOA, GPIO_PIN_4, GPIO_PIN_SET); // Alimente le pont diviseur
@@ -211,7 +211,18 @@ int main(void)
     }
 
 */
-  /* USER CODE END 2 */
+
+  // MISE EN VEILLE
+  //Nettoyage de sécurité au démarrage
+  __HAL_RTC_WAKEUPTIMER_CLEAR_FLAG(&hrtc, RTC_FLAG_WUTF);
+    HAL_RTCEx_DeactivateWakeUpTimer(&hrtc);
+
+    //Forcer l'activation de l'interruption RTC dans le contrôleur de la puce (NVIC)
+    // Même si CubeMX est censé le faire, cette ligne sécurise le coup
+    HAL_NVIC_SetPriority(RTC_TAMP_IRQn, 0, 0);
+    HAL_NVIC_EnableIRQ(RTC_TAMP_IRQn);
+
+    /* USER CODE END 2 */
 
   /* Initialize USER push-button, will be used to trigger an interrupt each time it's pressed.*/
   BSP_PB_Init(BUTTON_USER, BUTTON_MODE_EXTI);
@@ -392,7 +403,8 @@ int main(void)
              // 5. On laisse un tout petit délai pour que la tension se stabilise avant la prochaine conversion
                     HAL_Delay(10);
 */
-    // DEBUT DE LA VEILLE DE X MINUTES (X x 1 Minute)
+/* Ancien avec Tim2
+             // DEBUT DE LA VEILLE DE X MINUTES (X x 1 Minute)
      compteur_minutes = 0;
      while (compteur_minutes < 3 ) // 60 cycles x 10 secondes = 600 secondes = 10 minutes
     	 // 6 cycle = 1 minutes --> 1 cycle = 10 secondes
@@ -401,27 +413,57 @@ int main(void)
 
     	 compteur_minutes++;
     	 }
-     // SORTIE DU MODE VEILLE
-     // On rallume le périphérique UART pour la prochaine boucle de mesure
-     MX_USART2_UART_Init();
+*/
+/*
+             // On efface manuellement le flag matériel ici au cas où le callback a eu un raté
+             __HAL_RTC_WAKEUPTIMER_CLEAR_FLAG(&hrtc, RTC_FLAG_WUTF);
 
-     // On rallume le pont diviseur pour préparer les composants de mesure
-     HAL_GPIO_WritePin(GPIOA, GPIO_PIN_4, GPIO_PIN_SET);
+             // On arme le réveil de la RTC pour 10 minutes (599 secondes si configuré à 1Hz)
+             // Note : hrtc est la variable générée automatiquement par CubeMX
+             HAL_RTCEx_SetWakeUpTimer_IT(&hrtc, 4, RTC_WAKEUPCLOCK_CK_SPRE_16BITS,0); // à remplacer le chiffre pour le temps
 
-     // Petit délai de stabilisation électrique (10ms) avant de relancer l'ADC
-      HAL_Delay(10);
+             // Passage en mode Veille
+             // On appelle la fonction, la carte s'éteint et se bloque ici pendant 10 minutes
+             Aller_Au_Dodo();
+*/
+             // Nettoyage au Réveil
+/*             // Une fois réveillé, on désactive le timer de la RTC pour éviter qu'il ne re-sonne
+             // pendant que le microcontrôleur est en train de travailler.
+             //HAL_RTCEx_DeactivateWakeUpTimer(&hrtc);
+*/
+  /*           __HAL_RTC_WAKEUPTIMER_CLEAR_FLAG(&hrtc, RTC_FLAG_WUTF);
+*/
+            // Netoyage complet du matériel
+             HAL_PWR_EnableBkUpAccess();
+             HAL_RTCEx_DeactivateWakeUpTimer(&hrtc);
+             __HAL_RTC_WAKEUPTIMER_CLEAR_FLAG(&hrtc, RTC_FLAG_WUTF);
 
-      // Relance de l'ADC
-      HAL_ADC_Start_DMA(&hadc1, (uint32_t*)adc_buffer, 2);
-     }
+             // On nettoie manuellement les registres d'interruption EXTI de la RTC
+             EXTI->RPR1 = (1 << 19);
+             EXTI->FPR1 = (1 << 19);
+
+             // 3. PROGRAMMATION DU RÉVEIL (5 secondes = valeur 4)
+             if (HAL_RTCEx_SetWakeUpTimer_IT(&hrtc, 4, RTC_WAKEUPCLOCK_CK_SPRE_16BITS, 0) == HAL_OK)
+              {
+                // Si et SEULEMENT SI la RTC s'est bien armée, on s'endort
+                   Aller_Au_Dodo();
+              }
+              else
+              {
+               // Si la RTC a refusé de s'armer (bug de flag), on force un reset matériel de la RTC
+               // pour éviter de bloquer la carte à 2,3 mA
+                  NVIC_SystemReset();
+              }
+
+	      }
     }
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
-    }
+
 
   /* USER CODE END 3 */
-
+}
 
 /**
   * @brief System Clock Configuration
@@ -439,9 +481,10 @@ void SystemClock_Config(void)
   /** Initializes the RCC Oscillators according to the specified parameters
   * in the RCC_OscInitTypeDef structure.
   */
-  RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_HSI;
+  RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_HSI|RCC_OSCILLATORTYPE_LSI;
   RCC_OscInitStruct.HSIState = RCC_HSI_ON;
   RCC_OscInitStruct.HSICalibrationValue = RCC_HSICALIBRATION_DEFAULT;
+  RCC_OscInitStruct.LSIState = RCC_LSI_ON;
   RCC_OscInitStruct.PLL.PLLState = RCC_PLL_NONE;
   if (HAL_RCC_OscConfig(&RCC_OscInitStruct) != HAL_OK)
   {
@@ -575,47 +618,47 @@ static void MX_DAC1_Init(void)
 }
 
 /**
-  * @brief TIM2 Initialization Function
+  * @brief RTC Initialization Function
   * @param None
   * @retval None
   */
-static void MX_TIM2_Init(void)
+static void MX_RTC_Init(void)
 {
 
-  /* USER CODE BEGIN TIM2_Init 0 */
+  /* USER CODE BEGIN RTC_Init 0 */
 
-  /* USER CODE END TIM2_Init 0 */
+  /* USER CODE END RTC_Init 0 */
 
-  TIM_ClockConfigTypeDef sClockSourceConfig = {0};
-  TIM_MasterConfigTypeDef sMasterConfig = {0};
+  /* USER CODE BEGIN RTC_Init 1 */
 
-  /* USER CODE BEGIN TIM2_Init 1 */
+  /* USER CODE END RTC_Init 1 */
 
-  /* USER CODE END TIM2_Init 1 */
-  htim2.Instance = TIM2;
-  htim2.Init.Prescaler = 16000;
-  htim2.Init.CounterMode = TIM_COUNTERMODE_UP;
-  htim2.Init.Period = 5000;
-  htim2.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
-  htim2.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
-  if (HAL_TIM_Base_Init(&htim2) != HAL_OK)
+  /** Initialize RTC Only
+  */
+  hrtc.Instance = RTC;
+  hrtc.Init.HourFormat = RTC_HOURFORMAT_24;
+  hrtc.Init.AsynchPrediv = 127;
+  hrtc.Init.SynchPrediv = 255;
+  hrtc.Init.OutPut = RTC_OUTPUT_DISABLE;
+  hrtc.Init.OutPutRemap = RTC_OUTPUT_REMAP_NONE;
+  hrtc.Init.OutPutPolarity = RTC_OUTPUT_POLARITY_HIGH;
+  hrtc.Init.OutPutType = RTC_OUTPUT_TYPE_OPENDRAIN;
+  hrtc.Init.OutPutPullUp = RTC_OUTPUT_PULLUP_NONE;
+  hrtc.Init.BinMode = RTC_BINARY_NONE;
+  if (HAL_RTC_Init(&hrtc) != HAL_OK)
   {
     Error_Handler();
   }
-  sClockSourceConfig.ClockSource = TIM_CLOCKSOURCE_INTERNAL;
-  if (HAL_TIM_ConfigClockSource(&htim2, &sClockSourceConfig) != HAL_OK)
-  {
-    Error_Handler();
-  }
-  sMasterConfig.MasterOutputTrigger = TIM_TRGO_RESET;
-  sMasterConfig.MasterSlaveMode = TIM_MASTERSLAVEMODE_DISABLE;
-  if (HAL_TIMEx_MasterConfigSynchronization(&htim2, &sMasterConfig) != HAL_OK)
-  {
-    Error_Handler();
-  }
-  /* USER CODE BEGIN TIM2_Init 2 */
 
-  /* USER CODE END TIM2_Init 2 */
+  /** Enable the WakeUp
+  */
+  if (HAL_RTCEx_SetWakeUpTimer_IT(&hrtc, 0, RTC_WAKEUPCLOCK_RTCCLK_DIV16, 0) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN RTC_Init 2 */
+
+  /* USER CODE END RTC_Init 2 */
 
 }
 
@@ -801,7 +844,7 @@ uint8_t estimer_pourcentage_batterie(float v_bat_reel) {
 	 //             MISE EN VEILLE PROCESSEUR - Fonction                 //
 	//==================================================================//
 
-    void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
+   /* void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
     {
         if (htim->Instance == TIM2) // à testé avec ADC1
         {
@@ -809,6 +852,7 @@ uint8_t estimer_pourcentage_batterie(float v_bat_reel) {
             // à chaque fois que la minute est écoulée. Elle sert juste à valider le réveil.
         }
     }
+ */
 /* - V1 de fonction dodo
     void Aller_Au_Dodo(void)
     {
@@ -858,16 +902,24 @@ uint8_t estimer_pourcentage_batterie(float v_bat_reel) {
     void Aller_Au_Dodo(void)
     {
 
+    		// (Évite que la puce USB reste bloquée ou reçoive des caractères corrompus)
+    	    while(__HAL_UART_GET_FLAG(&huart2, UART_FLAG_TC) == RESET);
+
+/*    	    // Éteindre l'interruption de la RTC pour être sûr de repartir sur une base propre
+    	        __HAL_RTC_WAKEUPTIMER_DISABLE_IT(&hrtc, RTC_IT_WUT);
+*/
     	    // 1. EXTINCTION DES PÉRIPHÉRIQUES GOURMANDS
 
     	    HAL_ADC_Stop_DMA(&hadc1);             // Coupe le convertisseur ADC et le DMA
+    	    __HAL_ADC_DISABLE_IT(&hadc1, ADC_IT_EOC | ADC_IT_EOS | ADC_IT_OVR);
     	    HAL_DAC_Stop(&hdac1, DAC_CHANNEL_1);  // Coupe le DAC pour économiser de l'énergie
+
+    	    // --- EXTINCTION PROPRE DE LA LIAISON SÉRIE ---
     	    HAL_UART_DeInit(&huart2);             // Désactive la logique de l'UART2
     	    __HAL_RCC_USART2_CLK_DISABLE();       // Coupe l'horloge matérielle de l'UART2
 
-    	    // --- EXTINCTION PROPRE DE LA LIAISON SÉRIE ---
-    	    HAL_UART_DeInit(&huart2);             // Démonte l'UART2
-    	    __HAL_RCC_USART2_CLK_DISABLE();       // Coupe l'horloge de l'UART2
+
+
 
     	    // Extinction physique du pont diviseur de batterie (PA4 à 0V)
     	    HAL_GPIO_WritePin(GPIOA, GPIO_PIN_4, GPIO_PIN_RESET);
@@ -889,7 +941,7 @@ uint8_t estimer_pourcentage_batterie(float v_bat_reel) {
 
 
     	    // --- PORT A : On isole tout sauf PA13 et PA14 (Broches de programmation SWD) ---
-    	    GPIO_Blank_InitStruct.Pin = GPIO_PIN_ALL ^ (GPIO_PIN_13 | GPIO_PIN_14);
+    	    GPIO_Blank_InitStruct.Pin = GPIO_PIN_ALL; //^ (GPIO_PIN_13 | GPIO_PIN_14);
     	    //GPIO_Blank_InitStruct.Pin = 0x9FFF;
     	    HAL_GPIO_Init(GPIOA, &GPIO_Blank_InitStruct);
 
@@ -899,44 +951,26 @@ uint8_t estimer_pourcentage_batterie(float v_bat_reel) {
     	    HAL_GPIO_Init(GPIOC, &GPIO_Blank_InitStruct);
 
 
-    	    // 3. ENTRÉE EN MODE SLEEP AVEC RALENTISSEMENT DE L'HORLOGE
+    	    // 3. VEILLE AVEC LA RTC
 
-    	    HAL_SuspendTick();                          // Suspend le compteur logiciel de HAL
-    	    SysTick->CTRL &= ~SysTick_CTRL_TICKINT_Msk; // Coupe l'interruption matérielle SysTick (1ms)
-
-    	    // Nettoyage des drapeaux d'interruption pour éviter un réveil immédiat
-    	    __HAL_TIM_CLEAR_FLAG(&htim2, TIM_FLAG_UPDATE);
-    	    HAL_NVIC_ClearPendingIRQ(TIM2_IRQn);
-    	    HAL_NVIC_ClearPendingIRQ(SysTick_IRQn);
-
-    	    // On arme l'alarme (TIM2) pour 1 minute
-    	    HAL_TIM_Base_Start_IT(&htim2);
-
-
-    	    /*  OPTIMISATION FREQUENCE : Passage de 16 MHz à 1 MHz               */
-
-    	    // On applique le bit de division par 16 sur le prédiviseur AHB (HPRE)
-    	    MODIFY_REG(RCC->CFGR, RCC_CFGR_HPRE, RCC_CFGR_HPRE_3);
-
+    	    // On coupe l'interruption du SysTick (pour éviter les sauts de 0,69 à 0,71 mA)
+    	    CLEAR_BIT(SysTick->CTRL, SysTick_CTRL_TICKINT_Msk);
 /*
-    	    // LE PROCESSEUR S'ENDORT ICI EN MODE SLEEP NORMAL
-    	    HAL_PWR_EnterSLEEPMode(PWR_MAINREGULATOR_ON, PWR_SLEEPENTRY_WFI);
+    	    // Réactiver proprement l'interruption juste avant le dodo
+    	    __HAL_RTC_WAKEUPTIMER_ENABLE_IT(&hrtc, RTC_IT_WUT);
 */
-    	    // On demande au microcontrôleur de basculer sur son régulateur basse consommation.
-    	    // La HAL va automatiquement brider l'architecture interne pour économiser l'énergie.
+/*  	   // Il se réveillera automatiquement quand la RTC aura fini de compter 10 minutes
     	    HAL_PWR_EnterSLEEPMode(PWR_LOWPOWERREGULATOR_ON, PWR_SLEEPENTRY_WFI);
+*/
+    	    // LE MICROCONTRÔLEUR PLONGE EN LOW-POWER SLEEP ICI
+/*    	    // Il se réveillera automatiquement quand la RTC aura fini de compter 10 minutes
+    	    HAL_PWR_EnterSLEEPMode(PWR_LOWPOWERREGULATOR_ON, PWR_SLEEPENTRY_WFI);
+*/
+    	    HAL_PWR_EnterSLEEPMode(PWR_MAINREGULATOR_ON, PWR_SLEEPENTRY_WFI);
 
-    	    // --- LE CPU DORT ICI ---
-
-
-    	    /*   RETOUR À LA NORMALE : Remonte instantanément à 16 MHz            */
-
-    	    // On remet le prédiviseur à 0 (Pas de division -> Vitesse maximale)
-    	    MODIFY_REG(RCC->CFGR, RCC_CFGR_HPRE, 0x00000000U);
-
-    	    // 4. PHASE DE RÉVEIL (Exécutée dès que le TIM2 a fini de compter)
-
-    	    HAL_TIM_Base_Stop_IT(&htim2); // Désactive l'alarme du timer
+    	    //PHASE DE RÉVEIL AUTOMATIQUE (Après 10 minutes)
+    	    // On réactive immédiatement le SysTick système
+    	    SET_BIT(SysTick->CTRL, SysTick_CTRL_TICKINT_Msk);
 
     	    // RESTAURATION MATÉRIELLE : Remet les broches comme CubeMX les voulait
     	    GPIOA->MODER = save_GPIOA_MODER;
@@ -944,13 +978,20 @@ uint8_t estimer_pourcentage_batterie(float v_bat_reel) {
     	    GPIOC->MODER = save_GPIOC_MODER;
 
     	    // Rallume l'horloge de l'UART pour lui permettre de redémarrer proprement
+
+
+    	    // Relance de la liaison série pour les messages de réveil
     	    __HAL_RCC_USART2_CLK_ENABLE();
-
-    	    MX_USART2_UART_Init(); // redemarage de l'UART
-
-    	    // Relance l'horloge interne de base du système (SysTick)
-    	    SysTick->CTRL |= SysTick_CTRL_TICKINT_Msk;
+    	    MX_USART2_UART_Init();
     	    HAL_ResumeTick();
+    }
+
+    // Cette fonction est appelée automatiquement par la HAL dès que la RTC se réveille
+    void HAL_RTCEx_WakeUpTimerEventCallback(RTC_HandleTypeDef *hrtc)
+    {
+        // Ce callback est indispensable : sa simple présence indique à la HAL
+        // qu'elle doit nettoyer les registres d'interruption de la RTC.
+        __HAL_RTC_WAKEUPTIMER_CLEAR_FLAG(hrtc, RTC_FLAG_WUTF);
     }
 /* USER CODE END 4 */
 

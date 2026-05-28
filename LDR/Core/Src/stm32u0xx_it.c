@@ -58,7 +58,7 @@
 extern DMA_HandleTypeDef hdma_adc1;
 extern ADC_HandleTypeDef hadc1;
 extern DAC_HandleTypeDef hdac1;
-extern TIM_HandleTypeDef htim2;
+extern RTC_HandleTypeDef hrtc;
 /* USER CODE BEGIN EV */
 
 /* USER CODE END EV */
@@ -144,6 +144,20 @@ void SysTick_Handler(void)
 /******************************************************************************/
 
 /**
+  * @brief This function handles RTC and TAMP interrupts (combined EXTI lines 20 & 21).
+  */
+void RTC_TAMP_IRQHandler(void)
+{
+  /* USER CODE BEGIN RTC_TAMP_IRQn 0 */
+
+  /* USER CODE END RTC_TAMP_IRQn 0 */
+  HAL_RTCEx_WakeUpTimerIRQHandler(&hrtc);
+  /* USER CODE BEGIN RTC_TAMP_IRQn 1 */
+
+  /* USER CODE END RTC_TAMP_IRQn 1 */
+}
+
+/**
   * @brief This function handles EXTI line 4 to 15 interrupts.
   */
 void EXTI4_15_IRQHandler(void)
@@ -183,20 +197,6 @@ void ADC_COMP1_IRQHandler(void)
   /* USER CODE BEGIN ADC_COMP1_IRQn 1 */
 
   /* USER CODE END ADC_COMP1_IRQn 1 */
-}
-
-/**
-  * @brief This function handles TIM2 Global Interrupt.
-  */
-void TIM2_IRQHandler(void)
-{
-  /* USER CODE BEGIN TIM2_IRQn 0 */
-
-  /* USER CODE END TIM2_IRQn 0 */
-  HAL_TIM_IRQHandler(&htim2);
-  /* USER CODE BEGIN TIM2_IRQn 1 */
-
-  /* USER CODE END TIM2_IRQn 1 */
 }
 
 /**
