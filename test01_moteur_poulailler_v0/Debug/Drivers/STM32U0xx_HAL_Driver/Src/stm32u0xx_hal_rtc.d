@@ -1,4 +1,5 @@
-Core/Src/stm32u0xx_it.o: ../Core/Src/stm32u0xx_it.c ../Core/Inc/main.h \
+Drivers/STM32U0xx_HAL_Driver/Src/stm32u0xx_hal_rtc.o: \
+ ../Drivers/STM32U0xx_HAL_Driver/Src/stm32u0xx_hal_rtc.c \
  ../Drivers/STM32U0xx_HAL_Driver/Inc/stm32u0xx_hal.h \
  ../Core/Inc/stm32u0xx_hal_conf.h \
  ../Drivers/STM32U0xx_HAL_Driver/Inc/stm32u0xx_hal_rcc.h \
@@ -36,12 +37,7 @@ Core/Src/stm32u0xx_it.o: ../Core/Src/stm32u0xx_it.c ../Core/Inc/main.h \
  ../Drivers/STM32U0xx_HAL_Driver/Inc/stm32u0xx_hal_tim.h \
  ../Drivers/STM32U0xx_HAL_Driver/Inc/stm32u0xx_hal_tim_ex.h \
  ../Drivers/STM32U0xx_HAL_Driver/Inc/stm32u0xx_hal_uart.h \
- ../Drivers/STM32U0xx_HAL_Driver/Inc/stm32u0xx_hal_uart_ex.h \
- ../Drivers/BSP/STM32U0xx_Nucleo/stm32u0xx_nucleo.h \
- ../Core/Inc/stm32u0xx_nucleo_conf.h \
- ../Drivers/BSP/STM32U0xx_Nucleo/stm32u0xx_nucleo_errno.h \
- ../Core/Inc/stm32u0xx_it.h
-../Core/Inc/main.h:
+ ../Drivers/STM32U0xx_HAL_Driver/Inc/stm32u0xx_hal_uart_ex.h
 ../Drivers/STM32U0xx_HAL_Driver/Inc/stm32u0xx_hal.h:
 ../Core/Inc/stm32u0xx_hal_conf.h:
 ../Drivers/STM32U0xx_HAL_Driver/Inc/stm32u0xx_hal_rcc.h:
@@ -80,7 +76,3 @@ Core/Src/stm32u0xx_it.o: ../Core/Src/stm32u0xx_it.c ../Core/Inc/main.h \
 ../Drivers/STM32U0xx_HAL_Driver/Inc/stm32u0xx_hal_tim_ex.h:
 ../Drivers/STM32U0xx_HAL_Driver/Inc/stm32u0xx_hal_uart.h:
 ../Drivers/STM32U0xx_HAL_Driver/Inc/stm32u0xx_hal_uart_ex.h:
-../Drivers/BSP/STM32U0xx_Nucleo/stm32u0xx_nucleo.h:
-../Core/Inc/stm32u0xx_nucleo_conf.h:
-../Drivers/BSP/STM32U0xx_Nucleo/stm32u0xx_nucleo_errno.h:
-../Core/Inc/stm32u0xx_it.h:
