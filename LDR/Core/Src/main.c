@@ -222,7 +222,7 @@ int main(void)
     HAL_NVIC_SetPriority(RTC_TAMP_IRQn, 0, 0);
     HAL_NVIC_EnableIRQ(RTC_TAMP_IRQn);
 
-    /* USER CODE END 2 */
+  /* USER CODE END 2 */
 
   /* Initialize USER push-button, will be used to trigger an interrupt each time it's pressed.*/
   BSP_PB_Init(BUTTON_USER, BUTTON_MODE_EXTI);
@@ -314,11 +314,11 @@ int main(void)
 
 //LISSAGE DIRECT DE LA VALEUR BRUTE ADC
 // On passe la valeur brute 'adc_bat_value' (0-4095) dans le filtre
-         float adc_bat_moyen = lisser_tension_batterie(adc_bat_value);
+        // float adc_bat_moyen = lisser_tension_batterie(adc_bat_value);
 
 //Tension sur la PIN PA0 (entre 0 et 3.3V car elle ne prend que 3.3V)
-          //v_bat_measurer = ((float)adc_bat_value) * VCC / 4095.0;
-			v_bat_measurer = (adc_bat_moyen) * VCC / 4095.0;
+          v_bat_measurer = ((float)adc_bat_value) * VCC / 4095.0;
+			//v_bat_measurer = (adc_bat_moyen) * VCC / 4095.0;
 
 // Tension Réel des piles (Application du Coef)
           //v_bat_reel = v_bat_measurer * PDP_Bat_Coef;
@@ -520,7 +520,7 @@ static void MX_ADC1_Init(void)
 
   /** Configure Regular Channel
   */
-  sConfig.Channel = ADC_CHANNEL_5;
+  sConfig.Channel = ADC_CHANNEL_9;
   sConfig.Rank = ADC_REGULAR_RANK_1;
   sConfig.SamplingTime = ADC_SAMPLINGTIME_COMMON_1;
   if (HAL_ADC_ConfigChannel(&hadc1, &sConfig) != HAL_OK)
@@ -894,10 +894,9 @@ uint8_t estimer_pourcentage_batterie(float v_bat_reel) {
         CLEAR_BIT(SysTick->CTRL, SysTick_CTRL_TICKINT_Msk);
 
         /* ── 6. STOP MODE 1 — ~10µA ── */
-        /* C'est ici toute la différence avec ton code actuel */
         HAL_PWREx_EnterSTOP1Mode(PWR_STOPENTRY_WFI);
         //HAL_PWR_EnterSLEEPMode(PWR_LOWPOWERREGULATOR_ON, PWR_SLEEPENTRY_WFI);
-        /* ══ RÉVEIL PAR LA RTC ══ */
+        /*  RÉVEIL PAR LA RTC  */
 
         /* ── 7. Reconfigurer l'horloge (obligatoire après Stop Mode) ── */
         SystemClock_Config();
