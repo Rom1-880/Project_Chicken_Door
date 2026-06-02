@@ -51,8 +51,8 @@ const uint16_t speed_table[4] = {700, 800, 900, 999};      // Table des 4 vitess
 uint16_t       current_speed  = 900;                        // Valeur PWM correspondant au niveau 3
 uint8_t        rx_data;                                     // Dernier octet reçu sur l'UART
 uint8_t        rx_pending     = 0;  // 1 = octet de réveil disponible dans rx_data (capturé IT)
-char           msg[400];            // Buffer partagé sprintf/UART (ne pas utiliser en IT)
-
+char msg_cmd[150];    // Dédié uniquement aux réponses de commandes ('D', 'A', 'S'...)
+char msg_status[400]; // Dédié uniquement au gros tableau d'état périodique
 
 
 /* --- Mesure de courant moteur via ADC ------------------------------------ */
@@ -419,7 +419,7 @@ float Update_Moving_Average(float new_sample)
 
 static void UART_Send_Status(void)
 {
-    int len = sprintf(msg,
+    int len = sprintf(msg_status,
         "\r\n+--------------------------------------+\r\n"
         "|            ETAT DU SYSTEME           |\r\n"
         "+--------------------------------------+\r\n"
@@ -435,7 +435,7 @@ static void UART_Send_Status(void)
         threshold, compteur_securite, (int)motor_state, elapsed, speed_level);
 
     // Augmentation légère du timeout (100ms) car le message contient plus de caractères
-    HAL_UART_Transmit(&huart2, (uint8_t*)msg, len, 200);
+    HAL_UART_Transmit(&huart2, (uint8_t*)msg_status, len, 200);
 }
 
 
@@ -472,8 +472,8 @@ static void Motor_Security_FSM(uint32_t current_time)
         threshold   = courant_fonctionnement_morteur * 1.25f; // +25 % de marge
         motor_state = MOTEUR_MARCHE; // Surveillance active
 
-        int len = sprintf(msg, "Seuil fixé à: %.2f A\r\n", threshold);
-        HAL_UART_Transmit(&huart2, (uint8_t*)msg, len, 50);
+        int len = sprintf(msg_status, "Seuil fixé à: %.2f A\r\n", threshold);
+        HAL_UART_Transmit(&huart2, (uint8_t*)msg_status, len, 50);
     }
     else if (motor_state == MOTEUR_MARCHE && elapsed > 20000)
     {
@@ -571,9 +571,9 @@ static void Process_UART_Command(void)
             break;
     }
 
-    sprintf(msg, "\r\nCommande: %c | Niveau Vitesse: %d | Valeur PWM: %d\r\n",
+    sprintf(msg_cmd, "\r\nCommande: %c | Niveau Vitesse: %d | Valeur PWM: %d\r\n",
             rx_data, speed_level, current_speed);
-    HAL_UART_Transmit(&huart2, (uint8_t*)msg, strlen(msg), 100);
+    HAL_UART_Transmit(&huart2, (uint8_t*)msg_cmd, strlen(msg_cmd), 100);
 }
 
 /* ---------------------------------------------------------------------------
