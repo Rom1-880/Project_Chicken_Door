@@ -1,0 +1,964 @@
+/* USER CODE BEGIN Header */
+/**
+  ******************************************************************************
+  * @file           : main.c
+  * @brief          : Main program body
+  ******************************************************************************
+  * @attention
+  *
+  * Copyright (c) 2026 STMicroelectronics.
+  * All rights reserved.
+  *
+  * This software is licensed under terms that can be found in the LICENSE file
+  * in the root directory of this software component.
+  * If no LICENSE file comes with this software, it is provided AS-IS.
+  *
+  ******************************************************************************
+  */
+/* USER CODE END Header */
+/* Includes ------------------------------------------------------------------*/
+#include "main.h"
+
+/* Private includes ----------------------------------------------------------*/
+/* USER CODE BEGIN Includes */
+#include "stdio.h"
+#include "string.h"
+#include "math.h"
+/* USER CODE END Includes */
+
+/* Private typedef -----------------------------------------------------------*/
+/* USER CODE BEGIN PTD */
+
+/* USER CODE END PTD */
+
+/* Private define ------------------------------------------------------------*/
+/* USER CODE BEGIN PD */
+
+  //==================================================================//
+ //                DEFINITION PARTIE ÉNERGIE PILE                    //
+//==================================================================//
+
+
+// Définition des seuils basés sur la datasheet Energizer (4 piles en série)
+#define V_100_Pourcent 6.0f //1.5V x 4
+#define V_75_Pourcent   5.2f  // 1.3V x 4
+#define V_50_Pourcent   4.8f  // 1.2V x 4
+#define V_20_Pourcent   4.4f  // 1.1V x 4 (Point de rupture)
+#define V_0_Pourcent    4.0f  // 1.0V x 4 (Seuil critique)
+
+// Reglage de l'OFFSET pour la batterie
+#define OFFSET_BAT 0.112f //retire 0,112V à la valeur finale
+
+
+/* USER CODE END PD */
+
+/* Private macro -------------------------------------------------------------*/
+/* USER CODE BEGIN PM */
+
+/* USER CODE END PM */
+
+/* Private variables ---------------------------------------------------------*/
+
+ADC_HandleTypeDef hadc1;
+DMA_HandleTypeDef hdma_adc1;
+
+DAC_HandleTypeDef hdac1;
+
+RTC_HandleTypeDef hrtc;
+
+UART_HandleTypeDef huart2;
+
+/* USER CODE BEGIN PV */
+
+uint32_t adc_buffer[2]; //[0] = IN5 (Rank1, LDR),  [1] = IN4 (Rank2, batterie)
+volatile uint8_t adc_ready = 0; // flag levé par le DMA quand les données sont prêtes
+
+
+   //==================================================================//
+  //                INITIALISATION PARTIE LUMINOSITÉ                  //
+ //==================================================================//
+
+
+// Variable pour la mesure de la luminosité
+uint16_t adc_value = 0;
+float voltage = 0.0f;
+float R_ldr = 0.0f;
+float lux = 0.0f;
+char msg[100];
+
+// Paramètres du montage
+const float R_FIXED =  100000.0f; //22000.0f; // résistance de 100k // Mesure Luminosité
+const float VCC = 3.3f;
+
+
+  //==================================================================//
+ //               INITIALISATION PARTIE ÉNERGIE PILE                 //
+//==================================================================//
+
+
+// Variable pour l'estimation de l'énergie
+uint32_t adc_32 = 0;   // Valeur brute lue par l'ADC (0-4095)
+uint16_t adc_bat_value = 0;   // Valeur brute lue par l'ADC (0-4095)
+float v_bat_measurer = 0.0f;  // Tension lue sur la pin PA0
+float v_bat_reel = 0.0f;      // Tension réelle de la pile (après correction du pont)
+int bat_pourcentage = 0;       // Résultat final en %
+
+// Paramètres du montage
+const float R10 = 560000.0f; //res 560k Ohm
+const float R11 = 330000.0f; //res 330k Ohm
+
+// Pont Diviseur Pile
+const float PDP_Bat_Coef= (R11+R10)/ R11;
+
+// Seuil des Piles (6V)
+const float V_MAX = 6.0f; // 100% //précédement mis à 6V
+const float V_MIN = 4.0f; // 0%
+
+//Lissage pour que le résultat soit stable
+float v_bat_lisse = 0.0f;
+
+//Nombre d'échantillons
+const int nb_echantillons = 10;
+
+   //==================================================================//
+  //               		MISE EN VEILLE PROCESSEUR                     //
+ //==================================================================//
+
+//uint32_t duree_veille = 60000; // 120 000 ms = 2 minutes
+uint8_t compteur_minutes = 0; // Compte les minutes en veille
+
+/* USER CODE END PV */
+
+/* Private function prototypes -----------------------------------------------*/
+void SystemClock_Config(void);
+static void MX_GPIO_Init(void);
+static void MX_DMA_Init(void);
+static void MX_USART2_UART_Init(void);
+static void MX_ADC1_Init(void);
+static void MX_DAC1_Init(void);
+static void MX_RTC_Init(void);
+/* USER CODE BEGIN PFP */
+uint8_t estimer_pourcentage_batterie(float v_bat_reel); // car besoin d'un prototype pour le pourcentage
+
+//Prévient que l'outil existe (Prototype)
+float lisser_tension_batterie(float nouvelle_lecture);
+
+//Mise en veille du processeur
+void Aller_Au_Dodo(void);
+
+/* USER CODE END PFP */
+
+/* Private user code ---------------------------------------------------------*/
+/* USER CODE BEGIN 0 */
+
+/* USER CODE END 0 */
+
+/**
+  * @brief  The application entry point.
+  * @retval int
+  */
+int main(void)
+{
+
+  /* USER CODE BEGIN 1 */
+
+  /* USER CODE END 1 */
+
+  /* MCU Configuration--------------------------------------------------------*/
+
+  /* Reset of all peripherals, Initializes the Flash interface and the Systick. */
+  HAL_Init();
+
+  /* USER CODE BEGIN Init */
+
+  /* USER CODE END Init */
+
+  /* Configure the system clock */
+  SystemClock_Config();
+
+  /* USER CODE BEGIN SysInit */
+
+  /* USER CODE END SysInit */
+
+  /* Initialize all configured peripherals */
+  MX_GPIO_Init();
+  MX_DMA_Init();
+  MX_USART2_UART_Init();
+  MX_ADC1_Init();
+  MX_DAC1_Init();
+  MX_RTC_Init();
+  /* USER CODE BEGIN 2 */
+  HAL_ADCEx_Calibration_Start(&hadc1);
+  HAL_GPIO_WritePin(GPIOA, GPIO_PIN_4, GPIO_PIN_SET); // Alimente le pont diviseur
+  HAL_Delay(10);
+  HAL_ADC_Start_DMA(&hadc1, (uint32_t*)adc_buffer, 2); // Lance l'acquisition DMA en continu
+
+  //==================================================================//
+ //                        PARTIE ÉNERGIE PILE                       //
+//==================================================================//
+  /* // --- LE PRÉCHAUFFAGE FORCÉ ---
+    // On attend la toute première mesure réelle
+    while(adc_ready == 0);
+
+    // On récupère la valeur brute et on calcule la tension réelle
+    float v_init = (((float)(adc_buffer[1] & 0xFFFF)) * VCC / 4095.0f * PDP_Bat_Coef) + OFFSET_BAT;
+    // note : 0xFFFF correspond à 65535 (valeur max que l'on peu stocker dans un registre de 16 bits
+
+
+    // On remplit le filtre 50 fois avec cette valeur pour le "gaver" immédiatement
+    for(int i = 0; i < 50; i++) {
+        v_bat_lisse = lisser_tension_batterie(v_init);
+    }
+
+*/
+
+  // MISE EN VEILLE
+  //Nettoyage de sécurité au démarrage
+  __HAL_RTC_WAKEUPTIMER_CLEAR_FLAG(&hrtc, RTC_FLAG_WUTF);
+    HAL_RTCEx_DeactivateWakeUpTimer(&hrtc);
+
+    //Forcer l'activation de l'interruption RTC dans le contrôleur de la puce (NVIC)
+    // Même si CubeMX est censé le faire, cette ligne sécurise le coup
+    HAL_NVIC_SetPriority(RTC_TAMP_IRQn, 0, 0);
+    HAL_NVIC_EnableIRQ(RTC_TAMP_IRQn);
+
+  /* USER CODE END 2 */
+
+  /* Initialize USER push-button, will be used to trigger an interrupt each time it's pressed.*/
+  BSP_PB_Init(BUTTON_USER, BUTTON_MODE_EXTI);
+
+  /* Infinite loop */
+  /* USER CODE BEGIN WHILE */
+  while (1)
+    {
+
+	  //==================================================================//
+	 //                          LANCEMENT DES ADC                       //
+	//==================================================================//
+
+      // Lecture de la tension sur PA5 (LDR_INFO) // mesurer luminosité
+      /**HAL_ADC_Start(&hadc1);
+      if (HAL_ADC_PollForConversion(&hadc1, 100) == HAL_OK)
+      {
+          adc_value = HAL_ADC_GetValue(&hadc1);
+      }
+
+      // Lecture de la tension sur PA0 // Estimation de batterie (PILE)
+      if (HAL_ADC_PollForConversion(&hadc1, 100) == HAL_OK)
+           {
+               adc_bat_value = HAL_ADC_GetValue(&hadc1);
+           }
+
+      HAL_ADC_Stop(&hadc1);
+*/
+/*
+      //==================================================================//
+     //               		MISE EN VEILLE PROCESSEUR                    //
+    //==================================================================//
+	  // On rallume le pont AVANT de vérifier si l'ADC est prêt
+	        HAL_GPIO_WritePin(GPIOA, GPIO_PIN_4, GPIO_PIN_SET);
+
+	        // On laisse 150ms à la TENSION physique pour remonter et se stabiliser
+	        // C'est ce délai qui va corriger ton "0.47V"
+	        HAL_Delay(5000);
+*/
+	        // On attend que le DMA ait fini sa première nouvelle capture
+	        while(adc_ready == 0);
+
+	      if (adc_ready == 1)
+	      {
+	          adc_ready = 0;   // on remet le flag à 0
+
+	  // Lecture DMA : les valeurs sont mises à jour automatiquement en fond de tâche
+	  adc_32  = adc_buffer[0];
+	  //adc_value     = adc_buffer[0];   // IN5 (PA5) — LDR luminosité
+	  //adc_bat_value = adc_buffer[1];   // IN4 (PA4) — pont diviseur batterie
+	  adc_value     = adc_32&0xFFFF;   // IN5 (PA5) — LDR luminosité
+	  adc_bat_value = (adc_32&0xFFFF0000)>>16;   // IN4 (PA4) — pont diviseur batterie
+
+
+      //==================================================================//
+     //                          PARTIE LUMINOSITÉ                       //
+    //==================================================================//
+
+      //  Conversion : Chiffre ADC -> Tension (Volt)
+      voltage = (float)adc_value * VCC / 4095.0;
+
+      // Calcul de la partie entière et des deux premières décimales
+      	  //int volt_entier = (int)voltage;
+      	  //int volt_decimale = (int)((voltage - volt_entier) * 100);
+
+      //  Calcul de la résistance de la LDR puis des Lux
+      	  // On vérifie que voltage > 0 pour éviter de diviser par zéro
+      if (voltage > 0.1f) {
+          // Formule du pont diviseur inversée pour trouver R_ldr
+          R_ldr = (VCC * R_FIXED/ voltage) - R_FIXED;
+
+          // Formule d'approximation Lux (standard pour une LDR de 10k-100k)
+          // Lux = 500 / (R_ldr en kOhm)
+          //lux = 500.0 / (R_ldr / 1000.0);
+          lux = pow(10,((log10(R_ldr/1000.0f)-2.94)/-0.789));
+          //V1 pow(10,((log(R_ldr/1000.0f)-3)/-0.91)
+          //V2 pow(10,((log10(R_ldr/1000.0f)-2.88)/-0.76))
+      } else {
+          lux = 0.0;
+      }
+      //Décomposition pour affichage sans %f
+          int volt_entier = (int)voltage;
+          int volt_dec    = (int)((voltage - volt_entier) * 100);
+          int rldr_kohm   = (int)(R_ldr / 1000.0f);
+          int lux_entier  = (int)lux;
+          int lux_dec     = (int)((lux - lux_entier) * 10);
+
+          //==================================================================//
+         //                        PARTIE ÉNERGIE PILE                       //
+        //==================================================================//
+
+//LISSAGE DIRECT DE LA VALEUR BRUTE ADC
+// On passe la valeur brute 'adc_bat_value' (0-4095) dans le filtre
+        // float adc_bat_moyen = lisser_tension_batterie(adc_bat_value);
+
+//Tension sur la PIN PA0 (entre 0 et 3.3V car elle ne prend que 3.3V)
+          v_bat_measurer = ((float)adc_bat_value) * VCC / 4095.0;
+			//v_bat_measurer = (adc_bat_moyen) * VCC / 4095.0;
+
+// Tension Réel des piles (Application du Coef)
+          //v_bat_reel = v_bat_measurer * PDP_Bat_Coef;
+          v_bat_lisse = (v_bat_measurer * PDP_Bat_Coef) + OFFSET_BAT;
+
+          // Lissage de V_bat_reel
+         // v_bat_lisse = lisser_tension_batterie(v_bat_reel); // obtention d'une valeur stable
+
+ /*         // Ajout de l'Offset pour corriger la mesure
+          v_bat_reel = v_bat_reel + OFFSET_BAT;
+ */
+          HAL_Delay(100); // 10 mesures * 100ms = 1 seconde totale pour la moyenne
+
+      //Calcul du pourcentage (Produit en croix entre V_MIN et V_MAX) -- Calcul linéaire -- pas bon car les piles n'ont pas une courbe linéaire
+      if (v_bat_lisse > V_MIN){
+    	  bat_pourcentage = (int)(((v_bat_lisse - V_MIN)/(V_MAX - V_MIN))*100.0f);
+      } else {
+    	  bat_pourcentage = 0;
+      }
+
+      // --- Calcul du pourcentage de l'Energie via la table de correspondance (table de correspondance) ---
+      //uint8_t mon_pourcentage = estimer_pourcentage_batterie(v_bat_reel);
+
+      // Sécurité pour ne pas afficher 102% ou -2%
+          if (bat_pourcentage > 100) bat_pourcentage = 100;
+          if (bat_pourcentage < 0)   bat_pourcentage = 0;
+
+      //Décomposition pour affichage sans %f
+          int v_entier = (int)v_bat_lisse;
+          int v_dec = (int)((v_bat_lisse - v_entier) * 100);
+
+          //==================================================================//
+         //                       AFFICHAGE LIAISON SÉRIE                    //
+        //==================================================================//
+
+         //Affichage Luminosité
+       // Affichage sur le PC (VCP / USART2)
+      // On affiche l'entier (int)lux pour être sûr que ça s'affiche sans config spéciale
+      //int len = sprintf(msg, "ADC: %lu |Tension : %d.%02dV | Lux estimat: %d\r\n", adc_value, voltage, (int)lux);
+         int len = sprintf(msg, "ADC:%4lu | V:%d.%02dV | R_ldr:%d kohm | Lux:%d.%d\r\n", adc_value, volt_entier, volt_dec, rldr_kohm, lux_entier, lux_dec);
+          HAL_UART_Transmit(&huart2, (uint8_t*)msg, len, HAL_MAX_DELAY);
+
+/*          HAL_Delay(500); // On attend 0.5 secondes entre chaque mesure
+*/
+
+          //Affichage Batterie Restante
+          int len2 = sprintf(msg, "BAT: %4lu | Tension: %d.%02dV | Energie: %d%%\r\n\r\n",
+                  adc_bat_value, v_entier, v_dec, bat_pourcentage); // ancienne partie de code
+        		  //adc_bat_value, v_entier, v_dec, mon_pourcentage);
+              HAL_UART_Transmit(&huart2, (uint8_t*)msg, len2, 100);
+
+             HAL_Delay(1000); // On attend 0.5 secondes entre chaque mesures
+
+/*          int len3 = sprintf(msg, "BRUT_LDR: %lu | BRUT_BAT: %lu\r\n", adc_value, adc_bat_value);
+              HAL_UART_Transmit(&huart2, (uint8_t*)msg, len3, 100);
+*/
+      // 5. COMMANDE DE LA LED (Seuil : 50 Lux)
+      //if (lux < 50.0) {
+      //    HAL_GPIO_WritePin(GPIOA, GPIO_PIN_4, GPIO_PIN_SET);   // Allume (Nuit)
+      //} else {
+      //    HAL_GPIO_WritePin(GPIOA, GPIO_PIN_4, GPIO_PIN_RESET); // Éteint (Jour)
+      //}
+
+
+              //==================================================================//
+             //               		MISE EN VEILLE PROCESSEUR                    //
+            //==================================================================//
+/*
+              // On éteint le pont diviseur (PA4) pour ne pas vider les piles pendant les 2 min
+                    HAL_GPIO_WritePin(GPIOA, GPIO_PIN_4, GPIO_PIN_RESET);
+
+             // On entre en mode sommeil (Sleep Mode) pour réduire la consommation du CPU
+             // Le CPU s'arrêtera ici et se réveillera brièvement toutes les 1ms (SysTick) pour le Delay
+                    HAL_PWR_EnterSLEEPMode(PWR_MAINREGULATOR_ON, PWR_SLEEPENTRY_WFI);
+
+             // 3. On attend les 2 minutes
+                    HAL_Delay(duree_veille);
+
+            // 4. Au réveil, on rallume le pont diviseur pour la prochaine lecture
+                    HAL_GPIO_WritePin(GPIOA, GPIO_PIN_4, GPIO_PIN_SET);
+
+             // 5. On laisse un tout petit délai pour que la tension se stabilise avant la prochaine conversion
+                    HAL_Delay(10);
+*/
+             /* Nettoyage des flags RTC */
+             HAL_PWR_EnableBkUpAccess();
+             HAL_RTCEx_DeactivateWakeUpTimer(&hrtc);
+             __HAL_RTC_WAKEUPTIMER_CLEAR_FLAG(&hrtc, RTC_FLAG_WUTF);
+             EXTI->RPR1 = (1 << 19);
+             EXTI->FPR1 = (1 << 19);
+
+             /* Armement : 299 = 5 minutes à 1Hz (RTC_WAKEUPCLOCK_CK_SPRE_16BITS) */
+             /* Pour 5 min : valeur = (5 * 60) - 1 = 299                           */
+             /* Pour 10 min : valeur = (10 * 60) - 1 = 599                         */
+             if (HAL_RTCEx_SetWakeUpTimer_IT(&hrtc, 5,
+                     RTC_WAKEUPCLOCK_CK_SPRE_16BITS, 0) == HAL_OK)
+             {
+                 Aller_Au_Dodo();
+             }
+             else
+             {
+                 NVIC_SystemReset();
+
+	      }
+
+	      }
+    }
+    /* USER CODE END WHILE */
+
+    /* USER CODE BEGIN 3 */
+
+
+  /* USER CODE END 3 */
+}
+
+/**
+  * @brief System Clock Configuration
+  * @retval None
+  */
+void SystemClock_Config(void)
+{
+  RCC_OscInitTypeDef RCC_OscInitStruct = {0};
+  RCC_ClkInitTypeDef RCC_ClkInitStruct = {0};
+
+  /** Configure the main internal regulator output voltage
+  */
+  HAL_PWREx_ControlVoltageScaling(PWR_REGULATOR_VOLTAGE_SCALE2);
+
+  /** Initializes the RCC Oscillators according to the specified parameters
+  * in the RCC_OscInitTypeDef structure.
+  */
+  RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_HSI|RCC_OSCILLATORTYPE_LSI;
+  RCC_OscInitStruct.HSIState = RCC_HSI_ON;
+  RCC_OscInitStruct.HSICalibrationValue = RCC_HSICALIBRATION_DEFAULT;
+  RCC_OscInitStruct.LSIState = RCC_LSI_ON;
+  RCC_OscInitStruct.PLL.PLLState = RCC_PLL_NONE;
+  if (HAL_RCC_OscConfig(&RCC_OscInitStruct) != HAL_OK)
+  {
+    Error_Handler();
+  }
+
+  /** Initializes the CPU, AHB and APB buses clocks
+  */
+  RCC_ClkInitStruct.ClockType = RCC_CLOCKTYPE_HCLK|RCC_CLOCKTYPE_SYSCLK
+                              |RCC_CLOCKTYPE_PCLK1;
+  RCC_ClkInitStruct.SYSCLKSource = RCC_SYSCLKSOURCE_HSI;
+  RCC_ClkInitStruct.AHBCLKDivider = RCC_SYSCLK_DIV1;
+  RCC_ClkInitStruct.APB1CLKDivider = RCC_HCLK_DIV1;
+
+  if (HAL_RCC_ClockConfig(&RCC_ClkInitStruct, FLASH_LATENCY_1) != HAL_OK)
+  {
+    Error_Handler();
+  }
+}
+
+/**
+  * @brief ADC1 Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_ADC1_Init(void)
+{
+
+  /* USER CODE BEGIN ADC1_Init 0 */
+
+  /* USER CODE END ADC1_Init 0 */
+
+  ADC_ChannelConfTypeDef sConfig = {0};
+
+  /* USER CODE BEGIN ADC1_Init 1 */
+
+  /* USER CODE END ADC1_Init 1 */
+
+  /** Configure the global features of the ADC (Clock, Resolution, Data Alignment and number of conversion)
+  */
+  hadc1.Instance = ADC1;
+  hadc1.Init.ClockPrescaler = ADC_CLOCK_ASYNC_DIV4;
+  hadc1.Init.Resolution = ADC_RESOLUTION_12B;
+  hadc1.Init.DataAlign = ADC_DATAALIGN_RIGHT;
+  hadc1.Init.ScanConvMode = ADC_SCAN_ENABLE;
+  hadc1.Init.EOCSelection = ADC_EOC_SINGLE_CONV;
+  hadc1.Init.LowPowerAutoWait = ENABLE;
+  hadc1.Init.LowPowerAutoPowerOff = DISABLE;
+  hadc1.Init.ContinuousConvMode = ENABLE;
+  hadc1.Init.NbrOfConversion = 2;
+  hadc1.Init.DiscontinuousConvMode = DISABLE;
+  hadc1.Init.ExternalTrigConv = ADC_SOFTWARE_START;
+  hadc1.Init.ExternalTrigConvEdge = ADC_EXTERNALTRIGCONVEDGE_NONE;
+  hadc1.Init.DMAContinuousRequests = ENABLE;
+  hadc1.Init.Overrun = ADC_OVR_DATA_OVERWRITTEN;
+  hadc1.Init.SamplingTimeCommon1 = ADC_SAMPLETIME_160CYCLES_5;
+  hadc1.Init.SamplingTimeCommon2 = ADC_SAMPLETIME_160CYCLES_5;
+  hadc1.Init.OversamplingMode = DISABLE;
+  hadc1.Init.TriggerFrequencyMode = ADC_TRIGGER_FREQ_HIGH;
+  if (HAL_ADC_Init(&hadc1) != HAL_OK)
+  {
+    Error_Handler();
+  }
+
+  /** Configure Regular Channel
+  */
+  sConfig.Channel = ADC_CHANNEL_9;
+  sConfig.Rank = ADC_REGULAR_RANK_1;
+  sConfig.SamplingTime = ADC_SAMPLINGTIME_COMMON_1;
+  if (HAL_ADC_ConfigChannel(&hadc1, &sConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+
+  /** Configure Regular Channel
+  */
+  sConfig.Channel = ADC_CHANNEL_4;
+  sConfig.Rank = ADC_REGULAR_RANK_2;
+  if (HAL_ADC_ConfigChannel(&hadc1, &sConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN ADC1_Init 2 */
+
+
+  /* USER CODE END ADC1_Init 2 */
+
+}
+
+/**
+  * @brief DAC1 Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_DAC1_Init(void)
+{
+
+  /* USER CODE BEGIN DAC1_Init 0 */
+
+  /* USER CODE END DAC1_Init 0 */
+
+  DAC_ChannelConfTypeDef sConfig = {0};
+
+  /* USER CODE BEGIN DAC1_Init 1 */
+
+  /* USER CODE END DAC1_Init 1 */
+
+  /** DAC Initialization
+  */
+  hdac1.Instance = DAC1;
+  if (HAL_DAC_Init(&hdac1) != HAL_OK)
+  {
+    Error_Handler();
+  }
+
+  /** DAC channel OUT1 config
+  */
+  sConfig.DAC_SampleAndHold = DAC_SAMPLEANDHOLD_DISABLE;
+  sConfig.DAC_Trigger = DAC_TRIGGER_NONE;
+  sConfig.DAC_OutputBuffer = DAC_OUTPUTBUFFER_DISABLE;
+  sConfig.DAC_ConnectOnChipPeripheral = DAC_CHIPCONNECT_INTERNAL;
+  sConfig.DAC_UserTrimming = DAC_TRIMMING_FACTORY;
+  if (HAL_DAC_ConfigChannel(&hdac1, &sConfig, DAC_CHANNEL_1) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN DAC1_Init 2 */
+
+  /* USER CODE END DAC1_Init 2 */
+
+}
+
+/**
+  * @brief RTC Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_RTC_Init(void)
+{
+
+  /* USER CODE BEGIN RTC_Init 0 */
+
+  /* USER CODE END RTC_Init 0 */
+
+  /* USER CODE BEGIN RTC_Init 1 */
+
+  /* USER CODE END RTC_Init 1 */
+
+  /** Initialize RTC Only
+  */
+  hrtc.Instance = RTC;
+  hrtc.Init.HourFormat = RTC_HOURFORMAT_24;
+  hrtc.Init.AsynchPrediv = 127;
+  hrtc.Init.SynchPrediv = 255;
+  hrtc.Init.OutPut = RTC_OUTPUT_DISABLE;
+  hrtc.Init.OutPutRemap = RTC_OUTPUT_REMAP_NONE;
+  hrtc.Init.OutPutPolarity = RTC_OUTPUT_POLARITY_HIGH;
+  hrtc.Init.OutPutType = RTC_OUTPUT_TYPE_OPENDRAIN;
+  hrtc.Init.OutPutPullUp = RTC_OUTPUT_PULLUP_NONE;
+  hrtc.Init.BinMode = RTC_BINARY_NONE;
+  if (HAL_RTC_Init(&hrtc) != HAL_OK)
+  {
+    Error_Handler();
+  }
+
+  /** Enable the WakeUp
+  */
+  if (HAL_RTCEx_SetWakeUpTimer_IT(&hrtc, 0, RTC_WAKEUPCLOCK_RTCCLK_DIV16, 0) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN RTC_Init 2 */
+
+  /* USER CODE END RTC_Init 2 */
+
+}
+
+/**
+  * @brief USART2 Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_USART2_UART_Init(void)
+{
+
+  /* USER CODE BEGIN USART2_Init 0 */
+
+  /* USER CODE END USART2_Init 0 */
+
+  /* USER CODE BEGIN USART2_Init 1 */
+
+  /* USER CODE END USART2_Init 1 */
+  huart2.Instance = USART2;
+  huart2.Init.BaudRate = 115200;
+  huart2.Init.WordLength = UART_WORDLENGTH_8B;
+  huart2.Init.StopBits = UART_STOPBITS_1;
+  huart2.Init.Parity = UART_PARITY_NONE;
+  huart2.Init.Mode = UART_MODE_TX_RX;
+  huart2.Init.HwFlowCtl = UART_HWCONTROL_NONE;
+  huart2.Init.OverSampling = UART_OVERSAMPLING_16;
+  huart2.Init.OneBitSampling = UART_ONE_BIT_SAMPLE_DISABLE;
+  huart2.Init.ClockPrescaler = UART_PRESCALER_DIV1;
+  huart2.AdvancedInit.AdvFeatureInit = UART_ADVFEATURE_NO_INIT;
+  if (HAL_UART_Init(&huart2) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  if (HAL_UARTEx_SetTxFifoThreshold(&huart2, UART_TXFIFO_THRESHOLD_1_8) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  if (HAL_UARTEx_SetRxFifoThreshold(&huart2, UART_RXFIFO_THRESHOLD_1_8) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  if (HAL_UARTEx_DisableFifoMode(&huart2) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN USART2_Init 2 */
+
+  /* USER CODE END USART2_Init 2 */
+
+}
+
+/**
+  * Enable DMA controller clock
+  */
+static void MX_DMA_Init(void)
+{
+
+  /* DMA controller clock enable */
+  __HAL_RCC_DMA1_CLK_ENABLE();
+
+  /* DMA interrupt init */
+  /* DMA1_Channel1_IRQn interrupt configuration */
+  HAL_NVIC_SetPriority(DMA1_Channel1_IRQn, 0, 0);
+  HAL_NVIC_EnableIRQ(DMA1_Channel1_IRQn);
+
+}
+
+/**
+  * @brief GPIO Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_GPIO_Init(void)
+{
+  GPIO_InitTypeDef GPIO_InitStruct = {0};
+/* USER CODE BEGIN MX_GPIO_Init_1 */
+/* USER CODE END MX_GPIO_Init_1 */
+
+  /* GPIO Ports Clock Enable */
+  __HAL_RCC_GPIOC_CLK_ENABLE();
+  __HAL_RCC_GPIOF_CLK_ENABLE();
+  __HAL_RCC_GPIOA_CLK_ENABLE();
+  __HAL_RCC_GPIOB_CLK_ENABLE();
+
+  /*Configure GPIO pin Output Level */
+  HAL_GPIO_WritePin(GPIOA, GPIO_PIN_4, GPIO_PIN_RESET);
+
+  /*Configure GPIO pin : PA4 */
+  GPIO_InitStruct.Pin = GPIO_PIN_4;
+  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+  HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
+
+  /*Configure GPIO pins : I2C1_SCL_Pin I2C1_SDA_Pin */
+  GPIO_InitStruct.Pin = I2C1_SCL_Pin|I2C1_SDA_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_AF_OD;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+  GPIO_InitStruct.Alternate = GPIO_AF4_I2C1;
+  HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
+
+/* USER CODE BEGIN MX_GPIO_Init_2 */
+/* USER CODE END MX_GPIO_Init_2 */
+}
+
+/* USER CODE BEGIN 4 */
+
+// Callback appelé automatiquement par le DMA quand les 2 canaux sont convertis
+void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef* hadc)
+{
+    if (hadc->Instance == ADC1)
+    {
+        adc_ready = 1;   // lève le flag → le while(1) va traiter les données
+    }
+}
+
+	  //==================================================================//
+	 //               PARTIE ÉNERGIE PILE - Fonction                     //
+	//==================================================================//
+
+// Estimation pourcentage batterie grace à la table de correspondance
+/**
+uint8_t estimer_pourcentage_batterie(float v_bat_reel) {
+    uint8_t pourcentage;
+
+    // Application de la table de correspondance (Look-up Table)
+    if (v_bat_reel >= V_100_Pourcent) {
+        pourcentage = 100;
+    }
+    else if (v_bat_reel >= V_75_Pourcent) {
+        pourcentage = 75; // Zone de plateau stable
+    }
+    else if (v_bat_reel >= V_50_Pourcent) {
+        pourcentage = 50; // Milieu de décharge
+    }
+    else if (v_bat_reel >= V_20_Pourcent) {
+        pourcentage = 20; // Entrée dans le coude de fin de vie
+    }
+    else if (v_bat_reel >= V_0_Pourcent) {
+        pourcentage = 5;  // Alerte critique avant coupure
+    }
+    else {
+        pourcentage = 0;  // Pile vide selon les standards industriels
+    }
+
+    return pourcentage;
+}
+*/
+
+    // Calcul de la moyenne pour la tension de batterie
+    float lisser_tension_batterie(float nouvelle_lecture_adc) {
+    	static float historique [100] = {0}; // tableau qui reste en mémoire (static) //garde les 50 dernière valeur en mémoire
+    	static int index = 0;
+    	float somme = 0;
+
+    // Affichage immédiat
+   	static int premier_passage = 1; // Flag pour le démarrage pour stabilité imédiate
+
+    //Fonctionnement pour stabilité imédiate - Ajout de la nouvelle mesure dans le tableau
+    	if (premier_passage) {
+    	        for (int i = 0; i < nb_echantillons; i++) {
+    	            historique[i] = (float) nouvelle_lecture_adc; // On remplit tout le tableau avec la 1ère mesure
+    	        }
+    	        premier_passage = 0;
+    	        return (float) nouvelle_lecture_adc;
+    	    }
+
+
+    // Fonctionnement Normal -- Ajout de la nouvelle mesure dans le tableau
+    historique[index] = nouvelle_lecture_adc;
+    index = (index + 1) % nb_echantillons; // On boucle de 0 à 49
+
+    // Fonctionnement Normal -- Calcul de la moyenne
+    for (int i = 0; i < nb_echantillons; i++) {
+    	 somme += historique[i];
+    }
+    return somme / (float)nb_echantillons;
+ }
+
+
+	  //==================================================================//
+	 //             MISE EN VEILLE PROCESSEUR - Fonction                 //
+	//==================================================================//
+
+   /* void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
+    {
+        if (htim->Instance == TIM2) // à testé avec ADC1
+        {
+            // Cette fonction est appelée automatiquement par le processeur
+            // à chaque fois que la minute est écoulée. Elle sert juste à valider le réveil.
+        }
+    }
+ */
+/* - V1 de fonction dodo
+    void Aller_Au_Dodo(void)
+    {
+    //On coupe l'ADC pour qu'il arrête de consommer
+        HAL_ADC_Stop_DMA(&hadc1);
+    //On éteint le pont diviseur (PA4) pour économiser la batterie (des piles)
+        HAL_GPIO_WritePin(GPIOA, GPIO_PIN_4, GPIO_PIN_RESET);
+
+    //ON COUPE LE PORT SÉRIE (UART)
+    // On démonte le périphérique pour couper son horloge interne
+        HAL_UART_DeInit(&huart2);
+
+    // On force les broches TX/RX (PA2 et PA3) en mode Analogique pour couper les fuites de courant
+        GPIO_InitTypeDef GPIO_InitStruct = {0};
+        GPIO_InitStruct.Pin = GPIO_PIN_2 | GPIO_PIN_3;
+        GPIO_InitStruct.Mode = GPIO_MODE_ANALOG;
+        GPIO_InitStruct.Pull = GPIO_NOPULL;
+        HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
+   // On coupe le SysTick (l'horloge interne de 1ms qui empêcherait le dodo)
+        HAL_SuspendTick();
+
+  //Nettoyage pour éviter blocage
+   //vide de force la boîte aux lettres du TIM2 avant de dormir
+        __HAL_TIM_CLEAR_FLAG(&htim2, TIM_FLAG_UPDATE);
+
+   // On force le processeur à oublier l'interruption passée du TIM2
+         HAL_NVIC_ClearPendingIRQ(TIM2_IRQn);
+
+   // On force le processeur à oublier l'interruption passée du SysTick
+         HAL_NVIC_ClearPendingIRQ(SysTick_IRQn);
+
+         // On démarre notre alarme (le TIM2 va compter 1 minute)
+        HAL_TIM_Base_Start_IT(&htim2);
+
+   // LE PROCESSEUR PLONGE EN MODE SLEEP
+        HAL_PWR_EnterSLEEPMode(PWR_MAINREGULATOR_ON, PWR_SLEEPENTRY_WFI);
+
+   // ------------ Reveil de TIM2 après 1 Minute --------- //
+
+   // On arrête immédiatement le timer pour qu'il ne re-sonne pas en boucle
+        HAL_TIM_Base_Stop_IT(&htim2);
+
+  //On réactive le SysTick pour que le système reprenne son cours normal
+        HAL_ResumeTick();
+    }
+*/
+    void Aller_Au_Dodo(void)
+    {
+        /* ── 1. Attendre que l'UART finisse d'envoyer ── */
+        HAL_UART_DeInit(&huart2);
+        __HAL_RCC_USART2_CLK_DISABLE();
+
+        /* ── 2. Arrêter l'ADC et le DMA proprement ── */
+        HAL_ADC_Stop_DMA(&hadc1);
+        adc_ready = 0;
+
+        /* ── 3. Éteindre le pont diviseur ── */
+        HAL_GPIO_WritePin(GPIOA, GPIO_PIN_4, GPIO_PIN_RESET);
+
+        /* ── 4. Mettre toutes les GPIO en analogique (zéro fuite) ── */
+        GPIO_InitTypeDef GPIO_Blank = {0};
+        GPIO_Blank.Mode  = GPIO_MODE_ANALOG;
+        GPIO_Blank.Pull  = GPIO_NOPULL;
+        GPIO_Blank.Pin   = GPIO_PIN_ALL;
+        HAL_GPIO_Init(GPIOA, &GPIO_Blank);
+        HAL_GPIO_Init(GPIOB, &GPIO_Blank);
+        HAL_GPIO_Init(GPIOC, &GPIO_Blank);
+
+        /* ── 5. Couper le SysTick ── */
+        CLEAR_BIT(SysTick->CTRL, SysTick_CTRL_TICKINT_Msk);
+
+        /* ── 6. STOP MODE 1 — ~10µA ── */
+        HAL_PWREx_EnterSTOP1Mode(PWR_STOPENTRY_WFI);
+        //HAL_PWR_EnterSLEEPMode(PWR_LOWPOWERREGULATOR_ON, PWR_SLEEPENTRY_WFI);
+        /*  RÉVEIL PAR LA RTC  */
+
+        /* ── 7. Reconfigurer l'horloge (obligatoire après Stop Mode) ── */
+        SystemClock_Config();
+
+        /* ── 8. Réactiver le SysTick ── */
+        SET_BIT(SysTick->CTRL, SysTick_CTRL_TICKINT_Msk);
+        HAL_ResumeTick();
+
+        /* ── 9. Restaurer les GPIO selon CubeMX ── */
+        MX_GPIO_Init();
+
+        /* ── 10. Rallumer l'UART ── */
+        __HAL_RCC_USART2_CLK_ENABLE();
+        MX_USART2_UART_Init();
+
+        /* ── 11. Rallumer le pont diviseur et relancer l'ADC ── */
+        HAL_GPIO_WritePin(GPIOA, GPIO_PIN_4, GPIO_PIN_SET);
+        HAL_Delay(10); /* stabilisation du pont */
+        HAL_ADCEx_Calibration_Start(&hadc1);
+        HAL_ADC_Start_DMA(&hadc1, (uint32_t*)adc_buffer, 2);
+    }
+
+    // Cette fonction est appelée automatiquement par la HAL dès que la RTC se réveille
+    void HAL_RTCEx_WakeUpTimerEventCallback(RTC_HandleTypeDef *hrtc)
+    {
+        // Ce callback est indispensable : sa simple présence indique à la HAL
+        // qu'elle doit nettoyer les registres d'interruption de la RTC.
+        __HAL_RTC_WAKEUPTIMER_CLEAR_FLAG(hrtc, RTC_FLAG_WUTF);
+    }
+/* USER CODE END 4 */
+
+/**
+  * @brief  This function is executed in case of error occurrence.
+  * @retval None
+  */
+void Error_Handler(void)
+{
+  /* USER CODE BEGIN Error_Handler_Debug */
+  /* User can add his own implementation to report the HAL error return state */
+  __disable_irq();
+  while (1)
+  {
+  }
+}
+  /* USER CODE END Error_Handler_Debug */
+
+
+#ifdef  USE_FULL_ASSERT
+/**
+  * @brief  Reports the name of the source file and the source line number
+  *         where the assert_param error has occurred.
+  * @param  file: pointer to the source file name
+  * @param  line: assert_param error line source number
+  * @retval None
+  */
+void assert_failed(uint8_t *file, uint32_t line)
+{
+  /* USER CODE BEGIN 6 */
+  /* User can add his own implementation to report the file name and line number,
+     ex: printf("Wrong parameters value: file %s on line %d\r\n", file, line) */
+  /* USER CODE END 6 */
+}
+#endif /* USE_FULL_ASSERT */
