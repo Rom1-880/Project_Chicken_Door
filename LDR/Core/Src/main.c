@@ -87,7 +87,7 @@ float lux = 0.0f;
 char msg[100];
 
 // Paramètres du montage
-const float R_FIXED = 22000.0f; // résistance de 100k // Mesure Luminosité
+const float R_FIXED =  100000.0f; //22000.0f; // résistance de 100k // Mesure Luminosité
 const float VCC = 3.3f;
 
 
@@ -297,7 +297,9 @@ int main(void)
           // Formule d'approximation Lux (standard pour une LDR de 10k-100k)
           // Lux = 500 / (R_ldr en kOhm)
           //lux = 500.0 / (R_ldr / 1000.0);
-          lux = pow(10,((log(R_ldr/1000.0f)-3)/-0.91));
+          lux = pow(10,((log10(R_ldr/1000.0f)-2.94)/-0.789));
+          //V1 pow(10,((log(R_ldr/1000.0f)-3)/-0.91)
+          //V2 pow(10,((log10(R_ldr/1000.0f)-2.88)/-0.76))
       } else {
           lux = 0.0;
       }
