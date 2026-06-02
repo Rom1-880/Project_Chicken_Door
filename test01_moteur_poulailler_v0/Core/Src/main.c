@@ -47,10 +47,10 @@ typedef enum {
 
 /* --- Vitesse et commandes UART ------------------------------------------- */
 uint8_t        speed_level    = 3;                          // Niveau actuel (1=lent … 4=rapide)
-const uint16_t speed_table[4] = {700, 800, 900, 999};      // Table des 4 vitesses fixes
+const uint16_t speed_table[4] = {780, 840, 910, 999};      // Table des 4 vitesses fixes
 uint16_t       current_speed  = 900;                        // Valeur PWM correspondant au niveau 3
 uint8_t        rx_data;                                     // Dernier octet reçu sur l'UART
-uint8_t        rx_pending     = 0;  // 1 = octet de réveil disponible dans rx_data (capturé IT)
+volatile uint8_t        rx_pending     = 0;  // 1 = octet de réveil disponible dans rx_data (capturé IT)
 char msg_cmd[150];    // Dédié uniquement aux réponses de commandes ('D', 'A', 'S'...)
 char msg_status[400]; // Dédié uniquement au gros tableau d'état périodique
 
@@ -87,14 +87,14 @@ typedef enum {
     MOTEUR_ERREUR_BLOCAGE   // Moteur bloqué (surcourant × 5) — clignotement 0.5 s
 } MotorState_t;
 
-MotorState_t motor_state = MOTEUR_OFF; // État initial
+volatile MotorState_t motor_state = MOTEUR_OFF; // État initial
 uint32_t     elapsed     = 0;          // Durée ms depuis le dernier démarrage (accès global)
 
 
 
 /* --- Gestion du timeout d'affichage LEDs vitesse ------------------------- */
 uint32_t led_timer  = 0; // Horodatage du dernier changement de vitesse
-uint8_t  led_active = 0; // 1 = LEDs vitesse allumées, empêche la mise en veille
+volatile uint8_t  led_active = 0; // 1 = LEDs vitesse allumées, empêche la mise en veille
 
 
 /* USER CODE END PV */
@@ -485,7 +485,7 @@ static void Motor_Security_FSM(uint32_t current_time)
     else if (motor_state == MOTEUR_MARCHE)
     {
         // --- Défaut de présence : moteur déconnecté du circuit ---
-        if (moyenne_courant < 0.03f)
+        if (moyenne_courant < 0.038f)
         {
             Motor_HardStop(); // Coupe le hardware sans écraser motor_state
             motor_state = MOTEUR_ERREUR_ABSENCE; // Verrouille en état d'erreur (clignotement 3 s)
