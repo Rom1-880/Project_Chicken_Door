@@ -11,9 +11,9 @@
 ../Drivers/STM32U0xx_HAL_Driver/Src/stm32u0xx_hal_pwr_ex.c:626:19:HAL_PWREx_ConfigPVM	11
 ../Drivers/STM32U0xx_HAL_Driver/Src/stm32u0xx_hal_pwr_ex.c:770:6:HAL_PWREx_EnableBatteryCharging	1
 ../Drivers/STM32U0xx_HAL_Driver/Src/stm32u0xx_hal_pwr_ex.c:785:6:HAL_PWREx_DisableBatteryCharging	1
-../Drivers/STM32U0xx_HAL_Driver/Src/stm32u0xx_hal_pwr_ex.c:794:6:HAL_PWREx_PVD_PVM_IRQHandler	10
 ../Drivers/STM32U0xx_HAL_Driver/Src/stm32u0xx_hal_pwr_ex.c:909:13:HAL_PWREx_PVM3_Callback	1
 ../Drivers/STM32U0xx_HAL_Driver/Src/stm32u0xx_hal_pwr_ex.c:920:13:HAL_PWREx_PVM4_Callback	1
+../Drivers/STM32U0xx_HAL_Driver/Src/stm32u0xx_hal_pwr_ex.c:794:6:HAL_PWREx_PVD_PVM_IRQHandler	10
 ../Drivers/STM32U0xx_HAL_Driver/Src/stm32u0xx_hal_pwr_ex.c:931:6:HAL_PWREx_EnableInternalWakeUpLine	1
 ../Drivers/STM32U0xx_HAL_Driver/Src/stm32u0xx_hal_pwr_ex.c:940:6:HAL_PWREx_DisableInternalWakeUpLine	1
 ../Drivers/STM32U0xx_HAL_Driver/Src/stm32u0xx_hal_pwr_ex.c:969:6:HAL_PWREx_EnableSRAMContentRetention	1

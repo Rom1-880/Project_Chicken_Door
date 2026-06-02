@@ -1,8 +1,8 @@
-../Drivers/STM32U0xx_HAL_Driver/Src/stm32u0xx_hal.c:142:19:HAL_Init	2
-../Drivers/STM32U0xx_HAL_Driver/Src/stm32u0xx_hal.c:179:19:HAL_DeInit	1
 ../Drivers/STM32U0xx_HAL_Driver/Src/stm32u0xx_hal.c:204:13:HAL_MspInit	1
 ../Drivers/STM32U0xx_HAL_Driver/Src/stm32u0xx_hal.c:215:13:HAL_MspDeInit	1
+../Drivers/STM32U0xx_HAL_Driver/Src/stm32u0xx_hal.c:179:19:HAL_DeInit	1
 ../Drivers/STM32U0xx_HAL_Driver/Src/stm32u0xx_hal.c:238:26:HAL_InitTick	4
+../Drivers/STM32U0xx_HAL_Driver/Src/stm32u0xx_hal.c:142:19:HAL_Init	2
 ../Drivers/STM32U0xx_HAL_Driver/Src/stm32u0xx_hal.c:305:13:HAL_IncTick	1
 ../Drivers/STM32U0xx_HAL_Driver/Src/stm32u0xx_hal.c:316:17:HAL_GetTick	1
 ../Drivers/STM32U0xx_HAL_Driver/Src/stm32u0xx_hal.c:325:10:HAL_GetTickPrio	1
@@ -28,7 +28,7 @@
 ../Drivers/STM32U0xx_HAL_Driver/Src/stm32u0xx_hal.c:680:6:HAL_SYSCFG_EnableTSCComparatorMode	1
 ../Drivers/STM32U0xx_HAL_Driver/Src/stm32u0xx_hal.c:689:6:HAL_SYSCFG_DisableTSCComparatorMode	1
 ../Drivers/STM32U0xx_HAL_Driver/Src/stm32u0xx_hal.c:701:6:HAL_SYSCFG_SetTSCComparatorModeIO	1
-../Drivers/STM32U0xx_HAL_Driver/Src/stm32u0xx_hal.c:716:10:HAL_SYSCFG_GetTSCComparatorModeIO	2
+../Drivers/STM32U0xx_HAL_Driver/Src/stm32u0xx_hal.c:716:10:HAL_SYSCFG_GetTSCComparatorModeIO	1
 ../Drivers/STM32U0xx_HAL_Driver/Src/stm32u0xx_hal.c:731:6:HAL_SYSCFG_ClearTSCComparatorModeIO	1
 ../Drivers/STM32U0xx_HAL_Driver/Src/stm32u0xx_hal.c:743:6:HAL_SYSCFG_LockSRAM2	1
 ../Drivers/STM32U0xx_HAL_Driver/Src/stm32u0xx_hal.c:753:6:HAL_SYSCFG_UnlockSRAM2	1
