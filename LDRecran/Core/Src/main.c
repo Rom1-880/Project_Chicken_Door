@@ -24,6 +24,10 @@
 #include "stdio.h"
 #include "string.h"
 #include "math.h"
+// pour Ecran
+#include <stdbool.h>
+#include "lcd.h"
+#include "graphics.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -129,6 +133,15 @@ const int nb_echantillons = 10;
 //uint32_t duree_veille = 60000; // 120 000 ms = 2 minutes
 uint8_t compteur_minutes = 0; // Compte les minutes en veille
 
+//==================================================================//
+//               		Pour écran Touche 			                //
+//==================================================================//
+uint8_t touche_ON;
+uint8_t Drapeau_commande_recue = 0; // Le Drapeau de l'interruption
+char rx_buffer[10]; // Tableau de stockage de la trame
+
+
+
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -153,7 +166,15 @@ void Aller_Au_Dodo(void);
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
+void lire_commandes(void) {
+	if (Drapeau_commande_recue == true) {
 
+		if (strcmp(rx_buffer, "ON") == 0) {
+			touche_ON = 1;
+			HAL_UART_Transmit(&huart2, (uint8_t*)"--> Action: ON\r\n", 16, 100);
+		}
+	}
+}
 /* USER CODE END 0 */
 
 /**

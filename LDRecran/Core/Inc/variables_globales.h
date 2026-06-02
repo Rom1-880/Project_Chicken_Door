@@ -5,6 +5,10 @@
  *  Created on: Apr 22, 2026
  *      Author: ELITEBOOK
  *      for STM32 Portage   test
+ *
+ *  MODIFIED ON JUNE 2 2026
+ *  Author COVES Clément
+ *  for adaptation for my code for % Battery
  */
 
 #ifndef INC_VARIABLES_GLOBALES_H_
