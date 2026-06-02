@@ -38,6 +38,8 @@ UART_HandleTypeDef  huart2;
 
 /* USER CODE BEGIN PV */
 
+uint32_t disconnect_start_time = 0;
+
 /* --- Énumération états physiques de la vanne (direction moteur) ----------- */
 typedef enum {
     MOTEUR_ARRET = 0,
@@ -83,7 +85,7 @@ typedef enum {
     DEMARRAGE_MOTEUR,       // Phase initiale : surcourant transitoire ignoré
     CALIBRATION_MOTEUR,     // Mesure du courant nominal pour fixer le seuil
     MOTEUR_MARCHE,          // Surveillance active : détection blocage/absence
-    MOTEUR_ERREUR_ABSENCE,  // Moteur déconnecté (courant < 0.03 A) — clignotement 3 s
+    MOTEUR_ERREUR_ABSENCE,  // Moteur déconnecté (courant < 0.04 A) — clignotement 3 s
     MOTEUR_ERREUR_BLOCAGE   // Moteur bloqué (surcourant × 5) — clignotement 0.5 s
 } MotorState_t;
 
@@ -446,7 +448,7 @@ static void UART_Send_Status(void)
  *  DEMARRAGE (0→2 s)   : transitoire ignoré, courant élevé normal
  *  CALIBRATION (2→3 s) : mesure du courant nominal → fixe threshold = nominal × 1.2
  *  MARCHE (>3 s)       : surveillance active
- *    → courant < 0.03 A : moteur absent/déconnecté → ERREUR_ABSENCE
+ *    → courant < 0.04 A : moteur absent/déconnecté → ERREUR_ABSENCE
  *    → surcourant × 5   : blocage mécanique → ERREUR_BLOCAGE
  *    → elapsed > 20 s   : fin de course temporelle → arrêt propre
  * --------------------------------------------------------------------------- */
@@ -485,30 +487,56 @@ static void Motor_Security_FSM(uint32_t current_time)
     else if (motor_state == MOTEUR_MARCHE)
     {
         // --- Défaut de présence : moteur déconnecté du circuit ---
-        if (moyenne_courant < 0.038f)
+        if (moyenne_courant < 0.04f)
         {
-            Motor_HardStop(); // Coupe le hardware sans écraser motor_state
-            motor_state = MOTEUR_ERREUR_ABSENCE; // Verrouille en état d'erreur (clignotement 3 s)
-            HAL_UART_Transmit(&huart2, (uint8_t*)"!!! DEFAUT: MOTEUR DECONNECTE !!!\r\n", 35, 100);
-            elapsed = 0;
+            // 1. Si le moteur vient juste de descendre sous le seuil, on lance le chrono
+            if (disconnect_start_time == 0)
+            {
+                disconnect_start_time = current_time;
+                HAL_UART_Transmit(&huart2, (uint8_t*)"[!] Courant nul ! Verification en cours...\r\n", 44, 100);
+            }
+            // 2. Si le chrono est lancé, on gère l'affichage du décompte et la coupure
+            else
+            {
+                uint32_t temps_suspect = current_time - disconnect_start_time;
+
+                if (temps_suspect >= 5000)
+                {
+                    Motor_HardStop(); // Coupe le hardware sans écraser motor_state
+                    motor_state = MOTEUR_ERREUR_ABSENCE; // Verrouille en état d'erreur
+                    HAL_UART_Transmit(&huart2, (uint8_t*)"\r\n!!! DEFAUT: MOTEUR DECONNECTE (TIMEOUT 5S) !!!\r\n", 51, 100);
+                    elapsed = 0;
+                    disconnect_start_time = 0; // Reset du chrono
+                }
+                else
+                {
+
+                    // On affiche un message clair à chaque seconde fixe (1s, 2s, 3s, 4s)
+                    // Puisque Motor_Periodic_Update tourne toutes les 500ms ou 1000ms, on suit le rythme.
+                    char msg_countdown[60];
+                    int len_count = sprintf(msg_countdown, "[!] Test absence... en cours depuis %lu ms / 5000 ms\r\n", temps_suspect);
+                    HAL_UART_Transmit(&huart2, (uint8_t*)msg_countdown, len_count, 50);
+                }
+            }
         }
         // --- Détection de blocage mécanique par surcourant ---
         else if (moyenne_courant > threshold)
         {
-            compteur_securite++; // Un seul dépassement n'est pas suffisant (anti-faux positif)
+            disconnect_start_time = 0; // Le courant est bon, on reset le chrono d'absence
+            compteur_securite++;
 
             if (compteur_securite >= 5)
             {
-                // 5 dépassements consécutifs = blocage confirmé
-                Motor_HardStop(); // Coupe le hardware sans passer par Motor_Stop()
-                motor_state = MOTEUR_ERREUR_BLOCAGE; // Verrouille (clignotement 0.5 s)
+                Motor_HardStop();
+                motor_state = MOTEUR_ERREUR_BLOCAGE;
                 HAL_UART_Transmit(&huart2, (uint8_t*)"!!! DEFAUT: BLOCAGE MOTEUR  !!!\r\n", 35, 100);
                 elapsed = 0;
             }
         }
         else
         {
-            compteur_securite = 0; // Retour sous le seuil : on réinitialise le compteur
+            disconnect_start_time = 0; // Le courant est parfaitement normal, on reset tout
+            compteur_securite = 0;
         }
     }
 }
