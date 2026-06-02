@@ -66,6 +66,8 @@ DAC_HandleTypeDef hdac1;
 
 RTC_HandleTypeDef hrtc;
 
+SPI_HandleTypeDef hspi1;
+
 UART_HandleTypeDef huart2;
 
 /* USER CODE BEGIN PV */
@@ -137,6 +139,7 @@ static void MX_USART2_UART_Init(void);
 static void MX_ADC1_Init(void);
 static void MX_DAC1_Init(void);
 static void MX_RTC_Init(void);
+static void MX_SPI1_Init(void);
 /* USER CODE BEGIN PFP */
 uint8_t estimer_pourcentage_batterie(float v_bat_reel); // car besoin d'un prototype pour le pourcentage
 
@@ -187,6 +190,7 @@ int main(void)
   MX_ADC1_Init();
   MX_DAC1_Init();
   MX_RTC_Init();
+  MX_SPI1_Init();
   /* USER CODE BEGIN 2 */
   HAL_ADCEx_Calibration_Start(&hadc1);
   HAL_GPIO_WritePin(GPIOA, GPIO_PIN_4, GPIO_PIN_SET); // Alimente le pont diviseur
@@ -634,6 +638,46 @@ static void MX_RTC_Init(void)
 }
 
 /**
+  * @brief SPI1 Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_SPI1_Init(void)
+{
+
+  /* USER CODE BEGIN SPI1_Init 0 */
+
+  /* USER CODE END SPI1_Init 0 */
+
+  /* USER CODE BEGIN SPI1_Init 1 */
+
+  /* USER CODE END SPI1_Init 1 */
+  /* SPI1 parameter configuration*/
+  hspi1.Instance = SPI1;
+  hspi1.Init.Mode = SPI_MODE_MASTER;
+  hspi1.Init.Direction = SPI_DIRECTION_2LINES;
+  hspi1.Init.DataSize = SPI_DATASIZE_4BIT;
+  hspi1.Init.CLKPolarity = SPI_POLARITY_LOW;
+  hspi1.Init.CLKPhase = SPI_PHASE_1EDGE;
+  hspi1.Init.NSS = SPI_NSS_SOFT;
+  hspi1.Init.BaudRatePrescaler = SPI_BAUDRATEPRESCALER_2;
+  hspi1.Init.FirstBit = SPI_FIRSTBIT_MSB;
+  hspi1.Init.TIMode = SPI_TIMODE_DISABLE;
+  hspi1.Init.CRCCalculation = SPI_CRCCALCULATION_DISABLE;
+  hspi1.Init.CRCPolynomial = 7;
+  hspi1.Init.CRCLength = SPI_CRC_LENGTH_DATASIZE;
+  hspi1.Init.NSSPMode = SPI_NSS_PULSE_ENABLE;
+  if (HAL_SPI_Init(&hspi1) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN SPI1_Init 2 */
+
+  /* USER CODE END SPI1_Init 2 */
+
+}
+
+/**
   * @brief USART2 Initialization Function
   * @param None
   * @retval None
@@ -715,14 +759,24 @@ static void MX_GPIO_Init(void)
   __HAL_RCC_GPIOB_CLK_ENABLE();
 
   /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(GPIOA, GPIO_PIN_4, GPIO_PIN_RESET);
+  HAL_GPIO_WritePin(GPIOA, GPIO_PIN_4|A0_Pin|ALIM_AFF_Pin, GPIO_PIN_RESET);
 
-  /*Configure GPIO pin : PA4 */
-  GPIO_InitStruct.Pin = GPIO_PIN_4;
+  /*Configure GPIO pin Output Level */
+  HAL_GPIO_WritePin(GPIOB, CS_Pin|RST_Pin, GPIO_PIN_RESET);
+
+  /*Configure GPIO pins : PA4 A0_Pin ALIM_AFF_Pin */
+  GPIO_InitStruct.Pin = GPIO_PIN_4|A0_Pin|ALIM_AFF_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
   HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
+
+  /*Configure GPIO pins : CS_Pin RST_Pin */
+  GPIO_InitStruct.Pin = CS_Pin|RST_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+  HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
 
   /*Configure GPIO pins : I2C1_SCL_Pin I2C1_SDA_Pin */
   GPIO_InitStruct.Pin = I2C1_SCL_Pin|I2C1_SDA_Pin;

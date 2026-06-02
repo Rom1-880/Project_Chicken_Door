@@ -7,6 +7,10 @@
  *  Modified on: Apr 22, 2026
  *      Author: ALLAM Tarek
  *      for STM32 Portage
+ *
+ *      Modified on June 2, 2026
+ *      author COVES Clément
+ *      for battery indicator
  */
 
 #ifndef AFFICHAGEMENU_C_
@@ -394,7 +398,8 @@ void afficheecran8(void)   // Ecran principal (après un appui de 5s sur le BP O
   *              pile 1/2 :      1.18 -> 1.1   seuil :  593 et 544
   *              pile vide :     1.1 -> 0      seuil :  544                 avec q=3.2227.10-3    convertisseur 10 bits
  */
-
+/*
+  ----- Ancienne version
 
   if (tensionpile<545)                 // vrai seuils
  //   if (tensionpile<600)                 // seuil simul�s par ma LDR
@@ -441,8 +446,52 @@ void afficheecran8(void)   // Ecran principal (après un appui de 5s sur le BP O
          //setColor(COLOR_16_BLACK);    // inutile, la pile est pleine
          }
 
+*/
 
-
+    if (bat_pourcentage<5)                 // si - de 5%
+    //   if (tensionpile<600)                 // seuil simul�s par ma LDR
+           {
+            setColor(COLOR_16_RED);        // pile vide en rouge
+            drawRect(10,40,30,52);
+            fillRect(30,44,32,48);
+            setColor(COLOR_16_BLACK);
+            fillRect(12,42,16,50);
+            fillRect(18,42,22,50);
+            fillRect(24,42,28,50);
+           }
+      else if ((bat_pourcentage>0)&&(bat_pourcentage<33))     //entre 0 et 33%
+   //   else if ((tensionpile>600)&&(tensionpile<800))                   // seuil simul�s par ma LDR
+          {
+          setColor(COLOR_16_WHITE);        // pile 1 barre
+          drawRect(10,40,30,52);
+          fillRect(30,44,32,48);
+          fillRect(12,42,16,50);
+          setColor(COLOR_16_BLACK);
+          fillRect(18,42,22,50);
+          fillRect(24,42,28,50);
+          }
+      else if ((bat_pourcentage>33)&&(bat_pourcentage<66))                 //Entre 34% et 66%
+   //   else if ((tensionpile>800)&&(tensionpile<1000))                   // seuil simul�s par ma LDR
+            {
+            setColor(COLOR_16_WHITE);        // pile 2 barres
+            drawRect(10,40,30,52);
+            fillRect(30,44,32,48);
+            fillRect(12,42,16,50);
+            fillRect(18,42,22,50);
+            setColor(COLOR_16_BLACK);
+            fillRect(24,42,28,50);
+            }
+      else if (bat_pourcentage>66)                 // entre 67% et 100%
+   //   else if (tensionpile>1000)                   // seuil simul�s par ma LDR
+            {
+            setColor(COLOR_16_WHITE);        // pile 3 barres
+            drawRect(10,40,30,52);
+            fillRect(30,44,32,48);
+            fillRect(12,42,16,50);
+            fillRect(18,42,22,50);
+            fillRect(24,42,28,50);
+            //setColor(COLOR_16_BLACK);    // inutile, la pile est pleine
+            }
    /*
    * Inserer l'affichage de la pile à coté de l'heure!
    */
