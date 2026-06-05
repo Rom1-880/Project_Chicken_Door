@@ -77,43 +77,61 @@ static void MX_USART2_UART_Init(void);
   */
 int main(void)
 {
+    HAL_Init();
+    SystemClock_Config();
 
-  /* USER CODE BEGIN 1 */
+    MX_GPIO_Init();
+    MX_TIM1_Init();
+    MX_LPTIM1_Init();
+    MX_ADC1_Init();
+    MX_USART2_UART_Init();
+    MX_RTC_Init();
 
-  /* USER CODE END 1 */
+    /* USER CODE BEGIN 2 */
+    /* USER CODE BEGIN 2 */
+      HAL_TIM_PWM_Start(&htim1, TIM_CHANNEL_4); // Pré-démarre TIM1 (requis avant Motor_Forward)
+      __HAL_TIM_MOE_ENABLE(&htim1);             // Main Output Enable : active la sortie TIM1
 
-  /* MCU Configuration--------------------------------------------------------*/
+      if (HAL_LPTIM_PWM_Start(&hlptim1, LPTIM_CHANNEL_1) != HAL_OK) Error_Handler();
 
-  /* Reset of all peripherals, Initializes the Flash interface and the Systick. */
-  HAL_Init();
+      // 🔥 LA CORRECTION EST ICI : On appelle juste la fonction, et c'est TOUT !
+      UART_Send_Welcome_Msg();
 
-  /* USER CODE BEGIN Init */
+      /* USER CODE END 2 */
+    /* USER CODE BEGIN WHILE */
 
-  /* USER CODE END Init */
+    while (1)
+    {
+        // 1. Traitement des commandes UART
+        Process_UART_Command();
 
-  /* Configure the system clock */
-  SystemClock_Config();
+        // 2. Timeout LEDs vitesse
+        if (motor_state != MOTEUR_ERREUR_ABSENCE && motor_state != MOTEUR_ERREUR_BLOCAGE)
+        {
+            Update_LED_Timeout();
+        }
 
-  /* USER CODE BEGIN SysInit */
+        // 3. Clignotement d'erreur
+        Gerer_Erreur_Moteur();
 
-  /* USER CODE END SysInit */
+        // 4. Moteur en marche normale → surveillance courant
+        if (motor_state != MOTEUR_OFF
+         && motor_state != MOTEUR_ERREUR_ABSENCE
+         && motor_state != MOTEUR_ERREUR_BLOCAGE)
+        {
+            // On appelle UNIQUEMENT cette fonction.
+            // C'est elle qui gère en interne le rythme des 500 ms pour TOUT le monde.
+            Motor_Periodic_Update();
+        }
 
-  /* Initialize all configured peripherals */
-  MX_GPIO_Init();
-  MX_ADC1_Init();
-  MX_LPTIM1_Init();
-  MX_TIM1_Init();
-  MX_RTC_Init();
-  MX_USART2_UART_Init();
-  /* USER CODE BEGIN 2 */
-
-  /* USER CODE END 2 */
-
-  /* Infinite loop */
-  /* USER CODE BEGIN WHILE */
-  while (1)
-  {
+        // 5. Veille uniquement si tout est éteint
+        else if (motor_state == MOTEUR_OFF && led_active == 0)
+        {
+            Enter_Low_Power_Mode();
+        }
+    }
     /* USER CODE END WHILE */
+}
 
     /* USER CODE BEGIN 3 */
   }
