@@ -36,5 +36,10 @@ float Get_Motor_Current(void);
 float Update_Moving_Average(float new_sample);
 void Motor_Periodic_Update(void);
 void Process_UART_Command(void);
+void Update_LED_Timeout(void);
+void Gerer_Erreur_Moteur(void);
+void Enter_Low_Power_Mode(void);
 
+extern MotorState_t motor_state;
+extern uint8_t led_active; // (Remplace uint8_t par le vrai type de ta led_active si c'est un int ou un bool)
 #endif /* INC_MOTEUR_H_ */

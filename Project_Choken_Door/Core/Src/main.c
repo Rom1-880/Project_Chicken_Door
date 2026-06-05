@@ -4,16 +4,6 @@
   * @file           : main.c
   * @brief          : Main program body
   ******************************************************************************
-  * @attention
-  *
-  * Copyright (c) 2026 STMicroelectronics.
-  * All rights reserved.
-  *
-  * This software is licensed under terms that can be found in the LICENSE file
-  * in the root directory of this software component.
-  * If no LICENSE file comes with this software, it is provided AS-IS.
-  *
-  ******************************************************************************
   */
 /* USER CODE END Header */
 /* Includes ------------------------------------------------------------------*/
@@ -21,22 +11,19 @@
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
-
+#include "moteur.h"  // Inclusion du header de gestion du moteur
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
 /* USER CODE BEGIN PTD */
-
 /* USER CODE END PTD */
 
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
-
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
 /* USER CODE BEGIN PM */
-
 /* USER CODE END PM */
 
 /* Private variables ---------------------------------------------------------*/
@@ -51,7 +38,9 @@ TIM_HandleTypeDef htim1;
 UART_HandleTypeDef huart2;
 
 /* USER CODE BEGIN PV */
-
+/* Les variables globales du moteur sont déclarées dans moteur.c et */
+/* utilisées de manière autonome par ses fonctions internes. */
+extern uint8_t rx_data;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -63,12 +52,12 @@ static void MX_TIM1_Init(void);
 static void MX_RTC_Init(void);
 static void MX_USART2_UART_Init(void);
 /* USER CODE BEGIN PFP */
-
+void Clock_SwitchToSleep(void);
+void Clock_SwitchToFullSpeed(void);
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
-
 /* USER CODE END 0 */
 
 /**
@@ -77,61 +66,67 @@ static void MX_USART2_UART_Init(void);
   */
 int main(void)
 {
-    HAL_Init();
-    SystemClock_Config();
 
-    MX_GPIO_Init();
-    MX_TIM1_Init();
-    MX_LPTIM1_Init();
-    MX_ADC1_Init();
-    MX_USART2_UART_Init();
-    MX_RTC_Init();
+  /* USER CODE BEGIN 1 */
+  /* USER CODE END 1 */
 
-    /* USER CODE BEGIN 2 */
-    /* USER CODE BEGIN 2 */
-      HAL_TIM_PWM_Start(&htim1, TIM_CHANNEL_4); // Pré-démarre TIM1 (requis avant Motor_Forward)
-      __HAL_TIM_MOE_ENABLE(&htim1);             // Main Output Enable : active la sortie TIM1
+  /* MCU Configuration--------------------------------------------------------*/
 
-      if (HAL_LPTIM_PWM_Start(&hlptim1, LPTIM_CHANNEL_1) != HAL_OK) Error_Handler();
+  /* Reset of all peripherals, Initializes the Flash interface and the Systick. */
+  HAL_Init();
 
-      // 🔥 LA CORRECTION EST ICI : On appelle juste la fonction, et c'est TOUT !
-      UART_Send_Welcome_Msg();
+  /* USER CODE BEGIN Init */
 
-      /* USER CODE END 2 */
-    /* USER CODE BEGIN WHILE */
+  /* USER CODE END Init */
 
-    while (1)
-    {
-        // 1. Traitement des commandes UART
-        Process_UART_Command();
+  /* Configure the system clock */
+  SystemClock_Config();
 
-        // 2. Timeout LEDs vitesse
-        if (motor_state != MOTEUR_ERREUR_ABSENCE && motor_state != MOTEUR_ERREUR_BLOCAGE)
-        {
-            Update_LED_Timeout();
-        }
+  /* USER CODE BEGIN SysInit */
 
-        // 3. Clignotement d'erreur
-        Gerer_Erreur_Moteur();
+  /* USER CODE END SysInit */
 
-        // 4. Moteur en marche normale → surveillance courant
-        if (motor_state != MOTEUR_OFF
-         && motor_state != MOTEUR_ERREUR_ABSENCE
-         && motor_state != MOTEUR_ERREUR_BLOCAGE)
-        {
-            // On appelle UNIQUEMENT cette fonction.
-            // C'est elle qui gère en interne le rythme des 500 ms pour TOUT le monde.
-            Motor_Periodic_Update();
-        }
+  /* Initialize all configured peripherals */
+  MX_GPIO_Init();
+  MX_ADC1_Init();
+  MX_LPTIM1_Init();
+  MX_TIM1_Init();
+  MX_RTC_Init();
+  MX_USART2_UART_Init();
+  /* USER CODE BEGIN 2 */
+  /* --- INITIALISATIONS APPLICATIVES --- */
 
-        // 5. Veille uniquement si tout est éteint
-        else if (motor_state == MOTEUR_OFF && led_active == 0)
-        {
-            Enter_Low_Power_Mode();
-        }
-    }
+  // 1. Assurer que le moteur et les sécurités démarrent à l'arrêt complet
+  Motor_Stop();
+
+  // 2. Amorcer la première réception UART sous interruption (écoute permanente)
+  HAL_UART_Receive_IT(&huart2, (uint8_t*)&rx_data, 1);
+
+  /* USER CODE END 2 */
+
+  /* Infinite loop */
+  /* USER CODE BEGIN WHILE */
+  while (1)
+  {
+    /* --- EXECUTION DE LA LOGIQUE MODULAIRE --- */
+
+    // 1. Analyse et exécute les caractères reçus sur l'UART ('D', 'A', 'S', etc.)
+    Process_UART_Command();
+
+    // 2. Gère la FSM de sécurité, l'ADC (courant) et l'envoi du rapport toutes les 1s
+    Motor_Periodic_Update();
+
+    // 3. Éteint la rampe de LEDs de vitesse après un délai de 1.5 seconde
+    Update_LED_Timeout();
+
+    // 4. En cas d'erreur (blocage/absence), gère le clignotement asynchrone des LEDs
+    Gerer_Erreur_Moteur();
+
+    /* Note optionnelle : Si vous décidez d'activer le mode veille basse consommation */
+    /* par exemple suite à l'appui sur un bouton utilisateur, il vous suffira d'appeler : */
+    /* Enter_Low_Power_Mode(); */
+
     /* USER CODE END WHILE */
-}
 
     /* USER CODE BEGIN 3 */
   }
@@ -465,7 +460,41 @@ static void MX_GPIO_Init(void)
 }
 
 /* USER CODE BEGIN 4 */
+/* ===========================================================================
+ * FONCTIONS DE BASCULE D'HORLOGE (Requises par la veille dans moteur.c)
+ * =========================================================================== */
 
+/**
+ * @brief Abaisse la vitesse de l'horloge système à 4 MHz (MSI) pour le mode veille.
+ */
+void Clock_SwitchToSleep(void)
+{
+    __HAL_FLASH_SET_LATENCY(FLASH_LATENCY_0); // 0 wait state suffisant à 4 MHz
+    RCC_OscInitTypeDef osc = {0};
+    osc.OscillatorType = RCC_OSCILLATORTYPE_MSI;
+    osc.MSIState = RCC_MSI_ON;
+    osc.MSICalibrationValue = RCC_MSICALIBRATION_DEFAULT;
+    osc.MSIClockRange = RCC_MSIRANGE_6; // Range 6 = 4 MHz
+    osc.PLL.PLLState = RCC_PLL_NONE;
+    HAL_RCC_OscConfig(&osc);
+    HAL_PWREx_ControlVoltageScaling(PWR_REGULATOR_VOLTAGE_SCALE2); // Bascule d'échelle de tension
+}
+
+/**
+ * @brief Restaure l'horloge système à sa pleine vitesse (48 MHz) au réveil.
+ */
+void Clock_SwitchToFullSpeed(void)
+{
+    HAL_PWREx_ControlVoltageScaling(PWR_REGULATOR_VOLTAGE_SCALE1); // Échelle de performance maximale
+    RCC_OscInitTypeDef osc = {0};
+    osc.OscillatorType = RCC_OSCILLATORTYPE_MSI;
+    osc.MSIState = RCC_MSI_ON;
+    osc.MSICalibrationValue = RCC_MSICALIBRATION_DEFAULT;
+    osc.MSIClockRange = RCC_MSIRANGE_11; // Range 11 = 48 MHz
+    osc.PLL.PLLState = RCC_PLL_NONE;
+    HAL_RCC_OscConfig(&osc);
+    __HAL_FLASH_SET_LATENCY(FLASH_LATENCY_2); // 2 wait states requis pour 48 MHz
+}
 /* USER CODE END 4 */
 
 /**
@@ -475,7 +504,6 @@ static void MX_GPIO_Init(void)
 void Error_Handler(void)
 {
   /* USER CODE BEGIN Error_Handler_Debug */
-  /* User can add his own implementation to report the HAL error return state */
   __disable_irq();
   while (1)
   {
