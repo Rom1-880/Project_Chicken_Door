@@ -28,6 +28,9 @@
 #include <stdbool.h>
 #include "lcd.h"
 #include "graphics.h"
+#include "bibliotheque.h"
+#include "menu.h"
+#include "variables_globales.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -78,6 +81,49 @@ UART_HandleTypeDef huart2;
 
 uint32_t adc_buffer[2]; //[0] = IN5 (Rank1, LDR),  [1] = IN4 (Rank2, batterie)
 volatile uint8_t adc_ready = 0; // flag levé par le DMA quand les données sont prêtes
+
+/*----- Ecran Batterie ----- */
+// Variables pour le menu LCD
+uint8_t ON      = 0;
+uint8_t DWN     = 0;
+uint8_t HUP     = 0;
+uint8_t RTN     = 0;
+uint8_t ecran   = 0;
+uint8_t langue  = 2;   // Français par défaut
+uint8_t varmenu = 0;
+
+// Variables temps RTC
+RTC_TimeTypeDef sTime = {0};
+time_t temps = 0;
+struct tm tm_temps = {0};
+int8_t UTC = 1;
+int8_t absUTC = 1;
+
+// Variables modes
+uint8_t modeO = 1;
+uint8_t modeF = 1;
+int8_t  heureO = 7, minO = 0;
+int8_t  heureF = 21, minF = 0;
+int8_t  minretard = 0;
+int8_t  minretardchange = 0;
+int8_t  latitude = 48;
+int16_t longitude = 2;
+uint8_t choixi = 1;
+uint8_t sens = 0;
+
+// Variables boutons (pour menu.c)
+uint8_t touche_ON  = 0;
+uint8_t touche_HUP = 0;
+uint8_t touche_DWN = 0;
+uint8_t touche_RTN = 0;
+int8_t  Touche_2_On = 0;
+uint8_t Touche_3_On = 0;
+uint16_t Compteur_appui_touche = 0;
+short tempmescourant = 0;
+uint32_t tensionpile = 0;
+
+// UART série → commande écran
+uint8_t uart_rx_byte = 0;
 
 
    //==================================================================//
@@ -162,6 +208,9 @@ float lisser_tension_batterie(float nouvelle_lecture);
 //Mise en veille du processeur
 void Aller_Au_Dodo(void);
 
+/*----- Ecran Batterie ----- */
+void menu(void);
+
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
@@ -218,6 +267,20 @@ int main(void)
   HAL_Delay(10);
   HAL_ADC_Start_DMA(&hadc1, (uint32_t*)adc_buffer, 2); // Lance l'acquisition DMA en continu
 
+  /*----- Ecran Batterie ----- */
+  initialise_LCD();
+  clearScreen(1);
+  ecran = 0;
+  HAL_UART_Receive_IT(&huart2, &uart_rx_byte, 1);
+
+  // --- Initialisation écran LCD ---
+  initialise_LCD();   // allume, reset hardware, init logicielle, efface l'écran
+  clearScreen(1);
+  ecran = 0;          // démarre sur l'écran 0 (attend appui ON)
+
+  // --- Lancement réception UART en interruption ---
+  HAL_UART_Receive_IT(&huart2, &uart_rx_byte, 1);
+
   //==================================================================//
  //                        PARTIE ÉNERGIE PILE                       //
 //==================================================================//
@@ -256,7 +319,8 @@ int main(void)
   /* USER CODE BEGIN WHILE */
   while (1)
     {
-
+	  /*----- Ecran Batterie ----- */
+	  menu();
 	  //==================================================================//
 	 //                          LANCEMENT DES ADC                       //
 	//==================================================================//
@@ -821,6 +885,30 @@ void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef* hadc)
         adc_ready = 1;   // lève le flag → le while(1) va traiter les données
     }
 }
+/*----- Ecran Batterie ----- */
+void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
+{
+    if (huart->Instance == USART2)
+    {
+        static char    cmd[8] = {0};
+        static uint8_t idx    = 0;
+        char c = (char)uart_rx_byte;
+
+        if (c == '\r' || c == '\n')
+        {
+            cmd[idx] = '\0';
+            if      (idx==2 && cmd[0]=='O' && cmd[1]=='N')                { ON=1; touche_ON=1;  }
+            else if (idx==3 && cmd[0]=='R' && cmd[1]=='T' && cmd[2]=='N') { RTN=1; touche_RTN=1; }
+            else if (idx==3 && cmd[0]=='H' && cmd[1]=='U' && cmd[2]=='P') { HUP=1; touche_HUP=1; }
+            else if (idx==3 && cmd[0]=='D' && cmd[1]=='W' && cmd[2]=='N') { DWN=1; touche_DWN=1; }
+            idx = 0;
+        }
+        else if (idx < 7) { cmd[idx++] = c; }
+        else              { idx = 0; }
+
+        HAL_UART_Receive_IT(huart, &uart_rx_byte, 1);
+    }
+}
 
 	  //==================================================================//
 	 //               PARTIE ÉNERGIE PILE - Fonction                     //
@@ -958,15 +1046,19 @@ uint8_t estimer_pourcentage_batterie(float v_bat_reel) {
         /* ── 3. Éteindre le pont diviseur ── */
         HAL_GPIO_WritePin(GPIOA, GPIO_PIN_4, GPIO_PIN_RESET);
 
-        /* ── 4. Mettre toutes les GPIO en analogique (zéro fuite) ── */
-        GPIO_InitTypeDef GPIO_Blank = {0};
+      /* ── 4. Mettre toutes les GPIO en analogique (zéro fuite) ── */
+  /*      GPIO_InitTypeDef GPIO_Blank = {0};
         GPIO_Blank.Mode  = GPIO_MODE_ANALOG;
         GPIO_Blank.Pull  = GPIO_NOPULL;
         GPIO_Blank.Pin   = GPIO_PIN_ALL;
         HAL_GPIO_Init(GPIOA, &GPIO_Blank);
         HAL_GPIO_Init(GPIOB, &GPIO_Blank);
         HAL_GPIO_Init(GPIOC, &GPIO_Blank);
-
+*/
+  /*      //préserve les broches SPI/LCD)
+        GPIO_Blank.Pin = GPIO_PIN_2 | GPIO_PIN_3 | GPIO_PIN_4;
+        HAL_GPIO_Init(GPIOA, &GPIO_Blank);
+*/
         /* ── 5. Couper le SysTick ── */
         CLEAR_BIT(SysTick->CTRL, SysTick_CTRL_TICKINT_Msk);
 
@@ -994,6 +1086,9 @@ uint8_t estimer_pourcentage_batterie(float v_bat_reel) {
         HAL_Delay(10); /* stabilisation du pont */
         HAL_ADCEx_Calibration_Start(&hadc1);
         HAL_ADC_Start_DMA(&hadc1, (uint32_t*)adc_buffer, 2);
+
+        HAL_GPIO_WritePin(ALIM_AFF_GPIO_Port, ALIM_AFF_Pin, GPIO_PIN_RESET);
+        HAL_Delay(20);
     }
 
     // Cette fonction est appelée automatiquement par la HAL dès que la RTC se réveille
