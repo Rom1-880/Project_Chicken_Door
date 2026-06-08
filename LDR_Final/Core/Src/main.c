@@ -222,7 +222,8 @@ int main(void)
           R_ldr = (VCC * R_FIXED/ voltage) - R_FIXED;
 
           // Formule d'approximation Lux
-          lux = pow(10,((log10(R_ldr/1000.0f)-2.94)/-0.789));
+          //lux = pow(10,((log10(R_ldr/1000.0f)-2.8)/-0.712)); //lux = pow(10,((log10(R_ldr/1000.0f)-2.94)/-0.789))
+          lux = pow(10,((log10(R_ldr)-5.96)/-0.797));
       } else {
           lux = 0.0;
       }
@@ -251,7 +252,9 @@ int main(void)
 
       //Calcul du pourcentage (Produit en croix entre V_MIN et V_MAX) -- Calcul linéaire -- pas bon car les piles n'ont pas une courbe linéaire
       if (v_bat_lisse > V_MIN){
-    	  bat_pourcentage = (int)(((v_bat_lisse - V_MIN)/(V_MAX - V_MIN))*100.0f);
+ /*   	  bat_pourcentage = (int)(((v_bat_lisse - V_MIN)/(V_MAX - V_MIN))*100.0f);
+   */
+    	  bat_pourcentage =(-31.4f *v_bat_lisse * v_bat_lisse * v_bat_lisse)+(483.0f * v_bat_lisse * v_bat_lisse) -(2389.0f * v_bat_lisse) + 3842.0f;
       } else {
     	  bat_pourcentage = 0;
       }
