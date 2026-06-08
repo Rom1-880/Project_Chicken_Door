@@ -1,31 +1,15 @@
-/* ===========================================================================
- * Fichier : moteur.c
- * Description : Gestion du moteur (PWM, sécurité courant, UART, Mode veille)
- * =========================================================================== */
-
+/* moteur.c */
 #include "moteur.h"
 #include <stdio.h>
 #include <string.h>
 
-/* ===========================================================================
- * LIAISONS EXTERNES (Périphériques et fonctions définis dans main.c)
- * =========================================================================== */
+// Rappel des périphériques configurés dans le main.c (liaisons externes)
 extern TIM_HandleTypeDef htim1;
 extern LPTIM_HandleTypeDef hlptim1;
 extern ADC_HandleTypeDef hadc1;
 extern UART_HandleTypeDef huart2;
 
-/* Prototypes des fonctions CubeMX et de gestion d'horloge du main.c */
-extern void MX_GPIO_Init(void);
-extern void MX_TIM1_Init(void);
-extern void MX_LPTIM1_Init(void);
-extern void MX_ADC1_Init(void);
-extern void Clock_SwitchToSleep(void);
-extern void Clock_SwitchToFullSpeed(void);
-
-/* ===========================================================================
- * VARIABLES GLOBALES
- * =========================================================================== */
+// Déclaration et initialisation des variables globales de ta partie
 MotorState_t motor_state = MOTEUR_OFF;
 uint32_t motor_start_time = 0;
 uint32_t last_tick = 0;
@@ -38,15 +22,17 @@ uint32_t adc_value = 0;
 
 float courant_moteur = 0.0f;
 float moyenne_courant = 0.0f;
-float courant_fonctionnement_morteur = 0.0f; // Conservé tel quel pour compatibilité
+float courant_fonctionnement_morteur = 0.0f;
 float threshold = 1.0f;
 float lecture[5] = {0};
 float somme_courant = 0.0f;
 
-volatile uint8_t rx_data = 0;
-volatile uint8_t rx_pending = 0;
+uint8_t rx_data = 0;
+uint8_t rx_pending = 0;
 
-char msg_status[300];
+// ⚠ Taille calculée : trame UART_Send_Status ≈ 464 octets → 512 avec marge de sécurité
+// Ancien [300] causait un débordement de 164 octets → corruption mémoire → crash UART
+char msg_status[512];
 char msg_cmd[100];
 
 // Tableau des vitesses correspondantes aux niveaux 1 à 4
@@ -56,12 +42,9 @@ uint32_t led_timer = 0;
 
 
 /* ===========================================================================
- * FONCTIONS PRIVÉES (Uniquement visibles dans moteur.c)
+ * FONCTIONS PRIVÉES (uniquement visibles dans moteur.c)
  * =========================================================================== */
 
-/**
- * @brief Éteint l'ensemble des 4 LEDs de visualisation.
- */
 static void LED_AllOff(void)
 {
     HAL_GPIO_WritePin(LED_G_1_PORT, LED_G_1_PIN, GPIO_PIN_RESET);
@@ -70,9 +53,6 @@ static void LED_AllOff(void)
     HAL_GPIO_WritePin(LED_D_4_PORT, LED_D_4_PIN, GPIO_PIN_RESET);
 }
 
-/**
- * @brief Inverse l'état (Toggle) des 4 LEDs simultanément.
- */
 static void LED_ToggleAll(void)
 {
     HAL_GPIO_TogglePin(LED_G_1_PORT, LED_G_1_PIN);
@@ -81,9 +61,6 @@ static void LED_ToggleAll(void)
     HAL_GPIO_TogglePin(LED_D_4_PORT, LED_D_4_PIN);
 }
 
-/**
- * @brief Arrêt d'urgence matériel direct du pont en H et des PWM.
- */
 static void Motor_HardStop(void)
 {
     HAL_LPTIM_PWM_Stop(&hlptim1, LPTIM_CHANNEL_1);
@@ -92,18 +69,12 @@ static void Motor_HardStop(void)
     HAL_GPIO_WritePin(GPIOB, GPIO_PIN_2,  GPIO_PIN_RESET);
 }
 
-/**
- * @brief Arrête uniquement les signaux PWM (TIM1 et LPTIM1).
- */
 static void PWM_StopAll(void)
 {
     HAL_LPTIM_PWM_Stop(&hlptim1, LPTIM_CHANNEL_1);
     HAL_TIM_PWM_Stop(&htim1, TIM_CHANNEL_4);
 }
 
-/**
- * @brief Initialise les compteurs de temps lors d'un démarrage moteur.
- */
 static void Motor_StartTimer(void)
 {
     motor_start_time  = HAL_GetTick();
@@ -112,9 +83,6 @@ static void Motor_StartTimer(void)
     elapsed           = 0;
 }
 
-/**
- * @brief Envoie un rapport textuel complet de l'état du système via l'UART.
- */
 static void UART_Send_Status(void)
 {
     int len = sprintf(msg_status,
@@ -135,9 +103,6 @@ static void UART_Send_Status(void)
     HAL_UART_Transmit(&huart2, (uint8_t*)msg_status, len, 200);
 }
 
-/**
- * @brief Machine à États Finis (FSM) gérant la sécurité et le cycle du moteur.
- */
 static void Motor_Security_FSM(uint32_t current_time)
 {
     elapsed = current_time - motor_start_time;
@@ -166,7 +131,6 @@ static void Motor_Security_FSM(uint32_t current_time)
     }
     else if (motor_state == MOTEUR_MARCHE)
     {
-        /* Détection Absence Moteur (Courant nul) */
         if (moyenne_courant < 0.04f)
         {
             if (disconnect_start_time == 0)
@@ -194,7 +158,6 @@ static void Motor_Security_FSM(uint32_t current_time)
                 }
             }
         }
-        /* Détection Blocage Moteur (Surintensité répétée) */
         else if (moyenne_courant > threshold)
         {
             disconnect_start_time = 0;
@@ -218,12 +181,9 @@ static void Motor_Security_FSM(uint32_t current_time)
 
 
 /* ===========================================================================
- * FONCTIONS PUBLIQUES (Appelables depuis l'extérieur / main.c)
+ * FONCTIONS PUBLIQUES (Appelables depuis l'extérieur)
  * =========================================================================== */
 
-/**
- * @brief Active la marche avant du moteur via TIM1.
- */
 void Motor_Forward(void)
 {
     PWM_StopAll();
@@ -236,9 +196,7 @@ void Motor_Forward(void)
     Motor_StartTimer();
 }
 
-/**
- * @brief Active la marche arrière du moteur via LPTIM1.
- */
+
 void Motor_Reverse(void)
 {
     PWM_StopAll();
@@ -251,9 +209,6 @@ void Motor_Reverse(void)
     Motor_StartTimer();
 }
 
-/**
- * @brief Arrête proprement le moteur et réinitialise les sécurités de base.
- */
 void Motor_Stop(void)
 {
     PWM_StopAll();
@@ -267,12 +222,9 @@ void Motor_Stop(void)
     led_active = 0;
 }
 
-/**
- * @brief Modifie la vitesse actuelle du moteur et met à jour l'affichage LED.
- */
 void Motor_SetSpeed(uint16_t speed)
 {
-    if (speed > 999)             speed = 999;
+    if (speed > 999)      speed = 999;
     if (speed > 0 && speed < 700) speed = 700;
 
     current_speed = speed;
@@ -292,9 +244,6 @@ void Motor_SetSpeed(uint16_t speed)
     led_active = 1;
 }
 
-/**
- * @brief Effectue une mesure instantanée du courant consommé par le moteur via l'ADC.
- */
 float Get_Motor_Current(void)
 {
     float res_ohm = 1.3f;
@@ -315,9 +264,6 @@ float Get_Motor_Current(void)
     return courant_moteur;
 }
 
-/**
- * @brief Calcule la moyenne glissante du courant sur les 5 derniers échantillons.
- */
 float Update_Moving_Average(float new_sample)
 {
     lecture[0] = lecture[1];
@@ -332,14 +278,11 @@ float Update_Moving_Average(float new_sample)
     return somme_courant / 5.0f;
 }
 
-/**
- * @brief Gestion périodique (cadencée à 1s) des mesures de courant et de la FSM.
- */
 void Motor_Periodic_Update(void)
 {
     uint32_t current_time = HAL_GetTick();
 
-    if (current_time - last_tick >= 1000)
+    if (current_time - last_tick >= 1000) // Cadence fixe de 1000 ms (ajuste à 500 si besoin)
     {
         last_tick = current_time;
 
@@ -351,21 +294,17 @@ void Motor_Periodic_Update(void)
     }
 }
 
-/**
- * @brief Analyse et exécute les commandes reçues depuis le terminal UART.
- */
 void Process_UART_Command(void)
 {
-    // Si l'interruption n'a encore rien reçu, on quitte immédiatement
+    // Si l'interruption n'a rien reçu, on ne fait rien
     if (rx_pending == 0) return;
 
-    // Un caractère est arrivé ! On baisse le drapeau
+    // Un caractère a été reçu par l'interruption ! On baisse le drapeau
     rx_pending = 0;
 
-    // ÉCHO : On renvoie le caractère reçu au PC (cast pour éviter le warning volatile)
-    HAL_UART_Transmit(&huart2, (uint8_t*)&rx_data, 1, 10);
+    // Écho local : renvoie le caractère au PC pour voir ce qu'on tape
+    HAL_UART_Transmit(&huart2, &rx_data, 1, 10);
 
-    // Analyse du caractère reçu
     switch (rx_data)
     {
         case 'D': Motor_Forward(); break;
@@ -391,127 +330,193 @@ void Process_UART_Command(void)
             break;
     }
 
+    // IMPORTANT : On relance la réception par interruption pour le prochain caractère
+    HAL_UART_Receive_IT(&huart2, &rx_data, 1);
 }
-/**
- * @brief Éteint automatiquement la barre de LEDs de vitesse après 1.5 seconde.
- */
+
+void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
+{
+    if (huart->Instance == USART2) // Ou huart->Instance == &huart2 selon ton code
+    {
+        rx_pending = 1; // Lève le drapeau pour Process_UART_Command
+    }
+}
+
+
+/* ---------------------------------------------------------------------------
+ * Update_LED_Timeout — extinction automatique des LEDs vitesse après 1.5 s
+ * Évite de laisser la barre de vitesse allumée indéfiniment.
+ * Non appelée en état d'erreur : le clignotement d'erreur ne doit pas être coupé.
+ * --------------------------------------------------------------------------- */
 void Update_LED_Timeout(void)
 {
     if (led_active && (HAL_GetTick() - led_timer >= 1500))
     {
-        LED_AllOff();
-        led_active = 0;
+        LED_AllOff();  // Éteint les 4 LEDs
+        led_active = 0; // Lève le verrou de mise en veille
     }
 }
 
-/**
- * @brief Gère le clignotement asynchrone (non-bloquant) des LEDs en cas d'erreur.
- */
+
+/* ---------------------------------------------------------------------------
+ * Gerer_Erreur_Moteur — clignotement non-bloquant selon le type d'erreur
+ *
+ * ERREUR_ABSENCE  → toutes les LEDs clignotent toutes les 3 s (défaut discret)
+ * ERREUR_BLOCAGE  → toutes les LEDs clignotent toutes les 0.5 s (alarme rapide)
+ *
+ * Non-bloquant : utilise une variable statique + HAL_GetTick (pas de HAL_Delay).
+ * L'état est verrouillé : seule une commande 'S' permet de sortir de l'erreur.
+ * --------------------------------------------------------------------------- */
 void Gerer_Erreur_Moteur(void)
 {
-    static uint32_t last_blink_tick = 0;
+    static uint32_t last_blink_tick = 0; // Statique : persiste entre deux appels
     uint32_t intervalle = 0;
 
+    // Sélection de la période de clignotement selon l'erreur détectée
     if      (motor_state == MOTEUR_ERREUR_ABSENCE) intervalle = 3000; // Lent : déconnexion
     else if (motor_state == MOTEUR_ERREUR_BLOCAGE) intervalle = 500;  // Rapide : blocage
 
     if (intervalle > 0 && (HAL_GetTick() - last_blink_tick >= intervalle))
     {
-        last_blink_tick = HAL_GetTick();
-        LED_ToggleAll();
+        last_blink_tick = HAL_GetTick(); // Mémorise pour la prochaine période
+        LED_ToggleAll(); // Inverse l'état des 4 LEDs simultanément
     }
 }
 
-/**
- * @brief Fait passer le microcontrôleur en mode SLEEP basse consommation avec réveil UART.
- */
+
+/* ---------------------------------------------------------------------------
+ * Enter_Low_Power_Mode — veille SLEEP avec réveil par UART
+ *
+ * Séquence :
+ *   1. Purge UART → évite réveil immédiat sur flag résiduel
+ *   2. GPIO → analogique → supprime courants de fuite
+ *   3. Clock gating TIM1/LPTIM1/ADC
+ *   4. Clock_SwitchToSleep() EN PREMIER → HAL_UART_Init recalcule le BRR
+ *      ⚠ Doit précéder HAL_UART_Receive_IT : sinon l'Init annule l'IT
+ *   5. HAL_UART_Receive_IT → capture l'octet de réveil dans rx_data
+ *   6. SysTick off → WFI
+ *   ---- RÉVEIL ----
+ *   7. Clock_SwitchToFullSpeed() → BRR restauré pour 48 MHz
+ *   8. Périphériques restaurés
+ * --------------------------------------------------------------------------- */
 void Enter_Low_Power_Mode(void)
 {
     HAL_UART_Transmit(&huart2, (uint8_t*)"Entree en veille...\r\n", 21, 50);
-    HAL_Delay(10); // Laisse l'UART vider son buffer TX
+    HAL_Delay(10); // Laisse l'UART vider son buffer TX avant la coupure
 
-    /* 1. Purge UART */
+    /* 1. Purge UART : supprime les flags résiduels pour éviter un faux réveil */
     __HAL_UART_FLUSH_DRREGISTER(&huart2);
     __HAL_UART_CLEAR_FLAG(&huart2, UART_CLEAR_OREF | UART_CLEAR_NEF | UART_CLEAR_FEF | UART_CLEAR_PEF);
-    volatile uint32_t tmpreg = huart2.Instance->RDR;
-    (void)tmpreg;
+    volatile uint32_t tmpreg = huart2.Instance->RDR; // Vide le registre de données
+    (void)tmpreg;                                     // Évite le warning "unused variable"
 
-    /* 2. GPIO en analogique pour supprimer les courants de fuite */
+    /* 2. GPIO en analogique : supprime les courants de fuite (économie de courant) */
     GPIO_InitTypeDef GPIO_InitStruct = {0};
     GPIO_InitStruct.Mode = GPIO_MODE_ANALOG;
     GPIO_InitStruct.Pull = GPIO_NOPULL;
 
-    // Conserver PA2/PA3 (UART) et PA13/PA14 (SWD de débug)
+    // PA2 (TX) et PA3 (RX) conservés → UART physiquement connecté
+    // PA13/PA14 (SWD) conservés → débogage toujours possible
     GPIO_InitStruct.Pin = GPIO_PIN_ALL & ~(GPIO_PIN_2 | GPIO_PIN_3 | GPIO_PIN_13 | GPIO_PIN_14);
     HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
 
     GPIO_InitStruct.Pin = GPIO_PIN_ALL;
-    HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
+    HAL_GPIO_Init(GPIOB, &GPIO_InitStruct); // Tout GPIOB en analogique (moteur + LEDs inutiles)
     HAL_GPIO_Init(GPIOC, &GPIO_InitStruct);
 
-    /* 3. Clock gating (désactivation des horloges inutiles) */
+    /* 3. Clock gating : coupe les périphériques inutiles en veille */
     __HAL_RCC_TIM1_CLK_DISABLE();
     __HAL_RCC_LPTIM1_CLK_DISABLE();
     __HAL_RCC_ADC_CLK_DISABLE();
 
-    /* 4. Réduction de l'horloge système (ex: bascule sur MSI ou division) */
+    /* 4. Réduction clock EN PREMIER : HAL_UART_Init() recalcule le BRR @ 4 MHz
+     *    Règle absolue : Clock_SwitchToSleep() AVANT HAL_UART_Receive_IT
+     *    Sinon HAL_UART_Init() à l'intérieur effacerait RXNEIE → pas de réveil */
     Clock_SwitchToSleep();
 
-    /* 5. Configuration de l'interruption de réveil sur l'horloge réduite */
+    /* 5. Setup IT de réveil APRÈS le switch d'horloge
+     *    HAL stocke l'octet dans rx_data → HAL_UART_RxCpltCallback → rx_pending = 1 */
     HAL_UART_Receive_IT(&huart2, &rx_data, 1);
 
-    /* 6. Désactivation du SysTick pour éviter un réveil toutes les 1 ms */
+    /* 6. SysTick off : sinon réveil toutes les 1 ms (SysTick continue en SLEEP) */
     HAL_SuspendTick();
 
-    /* Entrée effective en mode SLEEP (Attente d'interruption UART - WFI) */
+    // CPU s'arrête ici — USART2 surveille le bus à 115200 baud @ 4 MHz
     HAL_PWR_EnterSLEEPMode(PWR_MAINREGULATOR_ON, PWR_SLEEPENTRY_WFI);
 
-    /* =================== RÉVEIL ICI =================== */
+    /* ======= RÉVEIL ICI ======= */
 
-    HAL_ResumeTick(); // Relance le SysTick immédiatement
+        HAL_ResumeTick(); // Relance le SysTick (HAL_GetTick() redevient fiable)
 
-    /* 7. Restauration de l'horloge système pleine vitesse (ex: 48 MHz) */
-    Clock_SwitchToFullSpeed();
+        /* 7. Restaure 48 MHz AVANT de relancer TIM1/LPTIM1 */
+        Clock_SwitchToFullSpeed();
 
-    /* 8. Réactivation des horloges périphériques */
-    __HAL_RCC_TIM1_CLK_ENABLE();
-    __HAL_RCC_LPTIM1_CLK_ENABLE();
-    __HAL_RCC_ADC_CLK_ENABLE();
+        /* 8. Réactive les horloges périphériques */
+        __HAL_RCC_TIM1_CLK_ENABLE();
+        __HAL_RCC_LPTIM1_CLK_ENABLE();
+        __HAL_RCC_ADC_CLK_ENABLE();
 
-    /* 9. Restauration complète des configurations matérielles */
-    MX_GPIO_Init();
-    MX_TIM1_Init();
-    MX_LPTIM1_Init();
-    MX_ADC1_Init();
+        /* 9. Restaure GPIO + périphériques (perdus pendant la veille) */
+        Peripherals_ReInit();
 
-    HAL_TIM_PWM_Start(&htim1, TIM_CHANNEL_4);
-    __HAL_TIM_MOE_ENABLE(&htim1);
+        /* ===================================================================
+         * /!\ CORRECTION INTERNE REVEIL GPIO /!\
+         * On reconfigure les broches du moteur qui ont été passées en ANALOGIQUE
+         * =================================================================== */
+        GPIO_InitTypeDef GPIO_ReInitStruct = {0};
 
-    HAL_UART_Transmit(&huart2, (uint8_t*)"Reveil OK !\r\n", 13, 50);
-}
+        // 1. Reconfiguration des broches de direction/contrôle (Sorties classiques)
+        GPIO_ReInitStruct.Mode  = GPIO_MODE_OUTPUT_PP;
+        GPIO_ReInitStruct.Pull  = GPIO_NOPULL;
+        GPIO_ReInitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+
+        GPIO_ReInitStruct.Pin   = GPIO_PIN_11; // Broche Marche Arrière (ou Avant selon ton câblage)
+        HAL_GPIO_Init(GPIOA, &GPIO_ReInitStruct);
+
+        GPIO_ReInitStruct.Pin   = GPIO_PIN_2;  // Broche Marche Avant (ou Arrière)
+        HAL_GPIO_Init(GPIOB, &GPIO_ReInitStruct);
+
+        // Si tu as des broches NSLEEP ou RESET pour le driver, réinitialise-les aussi ici !
+        // Exemple si ton NSLEEP est sur PA9 :
+        // GPIO_ReInitStruct.Pin = GPIO_PIN_9;
+        // HAL_GPIO_Init(GPIOA, &GPIO_ReInitStruct);
+
+        // 2. Reconfiguration des broches PWM (Fonctions alternatives)
+        // TIM1_CH4 (généralement sur PA11 ou autre selon ton .ioc, adapte si nécessaire)
+        GPIO_ReInitStruct.Mode      = GPIO_MODE_AF_PP;
+        GPIO_ReInitStruct.Pull      = GPIO_NOPULL;
+        GPIO_ReInitStruct.Speed     = GPIO_SPEED_FREQ_HIGH;
+        GPIO_ReInitStruct.Alternate = GPIO_AF2_TIM1; // Vérifie le numéro d'AF dans ton .ioc si besoin
+        GPIO_ReInitStruct.Pin       = GPIO_PIN_11;   // À ajuster selon la vraie broche PWM de ton TIM1_CH4
+        HAL_GPIO_Init(GPIOA, &GPIO_ReInitStruct);
+
+        /* =================================================================== */
+
+        HAL_UART_AbortReceive(&huart2);
+        HAL_UART_Receive_IT(&huart2, &rx_data, 1);
+
+        HAL_TIM_PWM_Start(&htim1, TIM_CHANNEL_4); // Relance TIM1
+        __HAL_TIM_MOE_ENABLE(&htim1);             // Réactive la sortie principale de TIM1
+
+        HAL_UART_Transmit(&huart2, (uint8_t*)"Reveil OK !\r\n", 13, 50);
+    }
 
 /**
- * @brief Callback HAL automatique lors de la réception complète d'un caractère UART.
- */
-void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
-{
-    if (huart->Instance == USART2)
-    {
-        rx_pending = 1;
-        HAL_UART_Receive_IT(&huart2, &rx_data, 1);
-    }
-}
-
-/* ---------------------------------------------------------------------------
- * HAL_UART_ErrorCallback — Sécurité anti-blocage de l'interruption RX
- * Si une erreur de frame, de bruit ou d'overrun (ORE) arrive (très fréquent
- * lors des gros envois de texte), la HAL coupe l'IT. Cette fonction la relance.
- * --------------------------------------------------------------------------- */
+  * @brief  Cette fonction est appelée automatiquement par le HAL
+  * si l'UART plante (Overrun, Bruit, etc.)
+  */
 void HAL_UART_ErrorCallback(UART_HandleTypeDef *huart)
 {
     if (huart->Instance == USART2)
     {
-        // Relance immédiatement l'interruption de réception pour ne pas perdre la main
-        HAL_UART_Receive_IT(&huart2, (uint8_t*)&rx_data, 1);
+        // 1. On annule la réception bloquée
+        HAL_UART_AbortReceive(huart);
+
+        // 2. On efface les drapeaux d'erreur matériels (Overrun, Framing, Noise)
+        // Note : sur STM32U0, effacer les flags se fait via le registre ICR
+        __HAL_UART_CLEAR_FLAG(huart, UART_CLEAR_OREF | UART_CLEAR_NEF | UART_CLEAR_FEF);
+
+        // 3. On relance l'interruption pour ne pas rester sourd
+        HAL_UART_Receive_IT(huart, &rx_data, 1);
     }
 }

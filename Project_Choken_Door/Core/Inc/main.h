@@ -64,6 +64,15 @@ void Error_Handler(void);
 
 /* USER CODE BEGIN Private defines */
 
+
+// --- Broches de commande du driver moteur ---
+#define MOTEUR_NSLEEP_PORT  GPIOA
+#define MOTEUR_NSLEEP_PIN   GPIO_PIN_9   // Réveil du driver (LOW = veille driver)
+#define MOTEUR_AVANT_PORT   GPIOB
+#define MOTEUR_AVANT_PIN    GPIO_PIN_1   // Sens avant : HIGH = actif
+#define MOTEUR_ARRIERE_PORT GPIOA
+#define MOTEUR_ARRIERE_PIN  GPIO_PIN_10  // Sens arrière : HIGH = actif
+
 /* USER CODE END Private defines */
 
 #ifdef __cplusplus

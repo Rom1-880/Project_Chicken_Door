@@ -2,8 +2,6 @@
 #ifndef INC_MOTEUR_H_
 #define INC_MOTEUR_H_
 
-
-
 // --- Broches LED de signalisation (gauche à droite) ---
 #define LED_G_1_PORT  GPIOB
 #define LED_G_1_PIN   GPIO_PIN_7  // LED 1 (la plus à gauche)
@@ -27,7 +25,9 @@ typedef enum {
 } MotorState_t;
 
 
-// Prototypes des fonctions publiques (accessibles par le main.c)
+// ---------------------------------------------------------------------------
+// Prototypes des fonctions publiques de moteur.c
+// ---------------------------------------------------------------------------
 void Motor_Forward(void);
 void Motor_Reverse(void);
 void Motor_Stop(void);
@@ -40,6 +40,26 @@ void Update_LED_Timeout(void);
 void Gerer_Erreur_Moteur(void);
 void Enter_Low_Power_Mode(void);
 
+// ---------------------------------------------------------------------------
+// Prototypes des fonctions d'horloge définies dans main.c
+// Appelées par Enter_Low_Power_Mode() dans moteur.c
+// ---------------------------------------------------------------------------
+void Clock_SwitchToSleep(void);
+void Clock_SwitchToFullSpeed(void);
+
+// ---------------------------------------------------------------------------
+// Variables globales exportées (définies dans moteur.c)
+// ---------------------------------------------------------------------------
 extern MotorState_t motor_state;
-extern uint8_t led_active; // (Remplace uint8_t par le vrai type de ta led_active si c'est un int ou un bool)
+extern uint8_t      led_active;
+extern uint8_t      rx_data;
+
+
+// ---------------------------------------------------------------------------
+// Prototypes des fonctions d'horloge/périphériques définies dans main.c
+// ---------------------------------------------------------------------------
+void Clock_SwitchToSleep(void);
+void Clock_SwitchToFullSpeed(void);
+void Peripherals_ReInit(void); // <-- Ajoute cette ligne
+
 #endif /* INC_MOTEUR_H_ */
