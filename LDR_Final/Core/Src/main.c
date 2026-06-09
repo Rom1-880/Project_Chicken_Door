@@ -246,8 +246,10 @@ int main(void)
 
 
 // Tension Réel des piles (Application du Coef)
-          v_bat_lisse = (v_bat_measurer * PDP_Bat_Coef) + OFFSET_BAT;
-
+          //Si besoin d'un OFFSET
+       /*   v_bat_lisse = (v_bat_measurer * PDP_Bat_Coef) + OFFSET_BAT;
+         */
+          v_bat_lisse = (v_bat_measurer * PDP_Bat_Coef);
           HAL_Delay(100);
 
       //Calcul du pourcentage (Produit en croix entre V_MIN et V_MAX) -- Calcul linéaire -- pas bon car les piles n'ont pas une courbe linéaire
@@ -292,16 +294,16 @@ int main(void)
              //               		MISE EN VEILLE PROCESSEUR                    //
             //==================================================================//
 
-             /* Nettoyage des flags RTC */
+             // Nettoyage des flags RTC
              HAL_PWR_EnableBkUpAccess();
              HAL_RTCEx_DeactivateWakeUpTimer(&hrtc);
              __HAL_RTC_WAKEUPTIMER_CLEAR_FLAG(&hrtc, RTC_FLAG_WUTF);
              EXTI->RPR1 = (1 << 19);
              EXTI->FPR1 = (1 << 19);
 
-             /* Armement : 299 = 5 minutes à 1Hz (RTC_WAKEUPCLOCK_CK_SPRE_16BITS) */
-             /* Pour 5 min : valeur = (5 * 60) - 1 = 299                           */
-             /* Pour 10 min : valeur = (10 * 60) - 1 = 599                         */
+             // Armement : 299 = 5 minutes à 1Hz (RTC_WAKEUPCLOCK_CK_SPRE_16BITS)
+             // Pour 5 min : valeur = (5 * 60) - 1 = 299
+             // Pour 10 min : valeur = (10 * 60) - 1 = 599
              if (HAL_RTCEx_SetWakeUpTimer_IT(&hrtc, 5,
                      RTC_WAKEUPCLOCK_CK_SPRE_16BITS, 0) == HAL_OK)
              {
@@ -312,8 +314,10 @@ int main(void)
                  NVIC_SystemReset();
 
 	      }
+
 	      }
-    }
+
+   }
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
