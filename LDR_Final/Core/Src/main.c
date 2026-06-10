@@ -204,8 +204,8 @@ int main(void)
 	  // Lecture DMA : les valeurs sont mises à jour automatiquement en fond de tâche
 	  adc_32  = adc_buffer[0];
 
-	  adc_value     = adc_32&0xFFFF;   // IN5 (PA5) — LDR luminosité
-	  adc_bat_value = (adc_32&0xFFFF0000)>>16;   // IN4 (PA4) — pont diviseur batterie
+	  adc_value     = adc_32&0xFFFF;   // IN5 (PA5) — LDR luminosité (16 bits poids faible)
+	  adc_bat_value = (adc_32&0xFFFF0000)>>16;   // IN4 (PA4) — pont diviseur batterie (16 bits poids fort)
 
 
       //==================================================================//
