@@ -94,6 +94,7 @@ int bat_pourcentage = 0;       // Résultat final en %
 const float R10 = 560000.0f; //res 560k Ohm
 const float R11 = 330000.0f; //res 330k Ohm
 
+
 // Pont Diviseur Pile
 const float PDP_Bat_Coef= (R11+R10)/ R11;
 
@@ -247,9 +248,8 @@ int main(void)
 
 // Tension Réel des piles (Application du Coef)
           //Si besoin d'un OFFSET
-       /*   v_bat_lisse = (v_bat_measurer * PDP_Bat_Coef) + OFFSET_BAT;
-         */
-          v_bat_lisse = (v_bat_measurer * PDP_Bat_Coef);
+          v_bat_lisse = (v_bat_measurer * PDP_Bat_Coef) + OFFSET_BAT;
+
           HAL_Delay(100);
 
       //Calcul du pourcentage (Produit en croix entre V_MIN et V_MAX) -- Calcul linéaire -- pas bon car les piles n'ont pas une courbe linéaire

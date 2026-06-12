@@ -14,7 +14,7 @@ extern uint32_t         adc_buffer[2];
 extern volatile uint8_t adc_ready;
 
 /* Define batterie  ---------------------------------*/
-#define OFFSET_BAT  0.112f
+#define OFFSET_BAT  -0.020f
 
 /* Prototypes ----------------------------------------------------------------*/
 void Aller_Au_Dodo(void);
