@@ -152,7 +152,7 @@ int main(void)
 
 
 
-	 // adc_value     = adc_buffer[0];   // IN5 (PA5) — LDR luminosité | adc_buffer[0] = partie LDR car rank 1
+	 adc_value     = adc_buffer[0];   // IN5 (PA5) — LDR luminosité | adc_buffer[0] = partie LDR car rank 1
 
 
 
