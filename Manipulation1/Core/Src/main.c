@@ -65,12 +65,8 @@ volatile uint8_t adc_ready = 0; // flag levé par le DMA quand les données sont
 // Variable pour la mesure de la luminosité
 uint16_t adc_value = 0;
 float voltage = 0.0f;
-float R_ldr = 0.0f;
-float lux = 0.0f;
 char msg[100];
 
-// Paramètres du montage
-const float R_FIXED =  100000.0f;  // résistance de 100k // Mesure Luminosité
 const float VCC = 3.3f;
 
 
@@ -156,7 +152,7 @@ int main(void)
 
 
 
-	  adc_value     = adc_buffer[0];   // IN5 (PA5) — LDR luminosité (16 bits poids faible)
+	 // adc_value     = adc_buffer[0];   // IN5 (PA5) — LDR luminosité | adc_buffer[0] = partie LDR car rank 1
 
 
 
@@ -167,18 +163,7 @@ int main(void)
       //  Conversion : Chiffre ADC -> Tension (Volt)
       voltage = (float)adc_value * VCC / 4095.0;
 
-      //  Calcul de la résistance de la LDR puis des Lux
-      	  // On vérifie que voltage > 0 pour éviter de diviser par zéro
-      if (voltage > 0.1f) {
-          // Formule du pont diviseur inversée pour trouver R_ldr
-          R_ldr = (VCC * R_FIXED/ voltage) - R_FIXED;
 
-          // Formule d'approximation Lux
-          //lux = pow(10,((log10(R_ldr/1000.0f)-2.8)/-0.712)); //lux = pow(10,((log10(R_ldr/1000.0f)-2.94)/-0.789))
-          lux = pow(10,((log10(R_ldr)-5.96)/-0.797));
-      } else {
-          lux = 0.0;
-      }
 
       //Décomposition pour affichage sans %f
           int volt_entier = (int)voltage;
@@ -195,8 +180,7 @@ int main(void)
               {
          //Affichage Luminosité
        // Affichage sur le PC  (USART2)
-      // On affiche l'entier (int)lux pour être sûr que ça s'affiche sans config spéciale
-        int len = sprintf(msg, "ADC:%4lu | V:%d.%02dV\r\n ", adc_value, volt_entier, volt_dec);
+        int len = sprintf(msg, "V:%d.%02dV\r\n", volt_entier, volt_dec);
           HAL_UART_Transmit(&huart2, (uint8_t*)msg, len, HAL_MAX_DELAY);
 
           // On met à jour le chronomètre pour le prochain coup
@@ -429,19 +413,6 @@ static void MX_GPIO_Init(void)
 }
 
 /* USER CODE BEGIN 4 */
-/*
-// Cette fonction publique appelle la fonction privée MX_GPIO_Init
-void Public_MX_GPIO_Init(void)
-{
-    MX_GPIO_Init();
-}
-
-// Cette fonction publique appelle la fonction privée MX_USART2_UART_Init
-void Public_MX_USART2_UART_Init(void)
-{
-    MX_USART2_UART_Init();
-}
-*/
 
 void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef *hadc)
 {
