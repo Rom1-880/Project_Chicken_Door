@@ -156,7 +156,7 @@ int main(void)
 
 
 
-	  adc_value     = adc_buffer[0];   // IN5 (PA5) — LDR luminosité (16 bits poids faible)
+	  adc_value     = adc_buffer[0];   // IN5 (PA5) — LDR luminosité
 
 
 
@@ -174,7 +174,6 @@ int main(void)
           R_ldr = (VCC * R_FIXED/ voltage) - R_FIXED;
 
           // Formule d'approximation Lux
-          //lux = pow(10,((log10(R_ldr/1000.0f)-2.8)/-0.712)); //lux = pow(10,((log10(R_ldr/1000.0f)-2.94)/-0.789))
           lux = pow(10,((log10(R_ldr)-5.96)/-0.797));
       } else {
           lux = 0.0;
