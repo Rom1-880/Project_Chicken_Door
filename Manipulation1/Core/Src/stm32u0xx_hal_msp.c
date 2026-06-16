@@ -179,56 +179,6 @@ void HAL_ADC_MspDeInit(ADC_HandleTypeDef* hadc)
 }
 
 /**
-* @brief DAC MSP Initialization
-* This function configures the hardware resources used in this example
-* @param hdac: DAC handle pointer
-* @retval None
-*/
-void HAL_DAC_MspInit(DAC_HandleTypeDef* hdac)
-{
-  if(hdac->Instance==DAC1)
-  {
-  /* USER CODE BEGIN DAC1_MspInit 0 */
-
-  /* USER CODE END DAC1_MspInit 0 */
-    /* Peripheral clock enable */
-    __HAL_RCC_DAC1_CLK_ENABLE();
-    /* DAC1 interrupt Init */
-    HAL_NVIC_SetPriority(TIM6_DAC_LPTIM1_IRQn, 0, 0);
-    HAL_NVIC_EnableIRQ(TIM6_DAC_LPTIM1_IRQn);
-  /* USER CODE BEGIN DAC1_MspInit 1 */
-
-  /* USER CODE END DAC1_MspInit 1 */
-  }
-
-}
-
-/**
-* @brief DAC MSP De-Initialization
-* This function freeze the hardware resources used in this example
-* @param hdac: DAC handle pointer
-* @retval None
-*/
-void HAL_DAC_MspDeInit(DAC_HandleTypeDef* hdac)
-{
-  if(hdac->Instance==DAC1)
-  {
-  /* USER CODE BEGIN DAC1_MspDeInit 0 */
-
-  /* USER CODE END DAC1_MspDeInit 0 */
-    /* Peripheral clock disable */
-    __HAL_RCC_DAC1_CLK_DISABLE();
-
-    /* DAC1 interrupt DeInit */
-    HAL_NVIC_DisableIRQ(TIM6_DAC_LPTIM1_IRQn);
-  /* USER CODE BEGIN DAC1_MspDeInit 1 */
-
-  /* USER CODE END DAC1_MspDeInit 1 */
-  }
-
-}
-
-/**
 * @brief UART MSP Initialization
 * This function configures the hardware resources used in this example
 * @param huart: UART handle pointer
