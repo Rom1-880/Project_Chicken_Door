@@ -24,7 +24,7 @@
 #include "stdio.h"
 #include "string.h"
 #include "math.h"
-#include "power_management.h"
+
 
 /* USER CODE END Includes */
 
@@ -51,8 +51,6 @@ DMA_HandleTypeDef hdma_adc1;
 
 DAC_HandleTypeDef hdac1;
 
-RTC_HandleTypeDef hrtc;
-
 UART_HandleTypeDef huart2;
 
 /* USER CODE BEGIN PV */
@@ -74,39 +72,11 @@ float lux = 0.0f;
 char msg[100];
 
 // Paramètres du montage
-const float R_FIXED =  100000.0f; //22000.0f; // résistance de 100k // Mesure Luminosité
+const float R_FIXED =  100000.0f;  // résistance de 100k // Mesure Luminosité
 const float VCC = 3.3f;
 
 
-  //==================================================================//
- //               INITIALISATION PARTIE ÉNERGIE PILE                 //
-//==================================================================//
 
-
-// Variable pour l'estimation de l'énergie
-uint32_t adc_32 = 0;   // Valeur brute lue par l'ADC (0-4095)
-uint16_t adc_bat_value = 0;   // Valeur brute lue par l'ADC (0-4095)
-float v_bat_measurer = 0.0f;  // Tension lue sur la pin PA0
-float v_bat_reel = 0.0f;      // Tension réelle de la pile (après correction du pont)
-int bat_pourcentage = 0;       // Résultat final en %
-
-// Paramètres du montage
-const float R10 = 560000.0f; //res 560k Ohm
-const float R11 = 330000.0f; //res 330k Ohm
-
-
-// Pont Diviseur Pile
-const float PDP_Bat_Coef= (R11+R10)/ R11;
-
-// Seuil des Piles (6V)
-const float V_MAX = 6.0f; // 100% //précédement mis à 6V
-const float V_MIN = 4.0f; // 0%
-
-//Lissage pour que le résultat soit stable
-float v_bat_lisse = 0.0f;
-
-//Nombre d'échantillons
-const int nb_echantillons = 10;
 
 
 
@@ -119,7 +89,6 @@ static void MX_DMA_Init(void);
 static void MX_USART2_UART_Init(void);
 static void MX_ADC1_Init(void);
 static void MX_DAC1_Init(void);
-static void MX_RTC_Init(void);
 /* USER CODE BEGIN PFP */
 
 
@@ -138,6 +107,7 @@ int main(void)
 {
 
   /* USER CODE BEGIN 1 */
+	uint32_t dernier_envoi = 0;
 
   /* USER CODE END 1 */
 
@@ -163,26 +133,12 @@ int main(void)
   MX_USART2_UART_Init();
   MX_ADC1_Init();
   MX_DAC1_Init();
-  MX_RTC_Init();
   /* USER CODE BEGIN 2 */
   HAL_ADCEx_Calibration_Start(&hadc1);
   HAL_GPIO_WritePin(GPIOA, GPIO_PIN_4, GPIO_PIN_SET); // Alimente le pont diviseur
   HAL_Delay(10);
   HAL_ADC_Start_DMA(&hadc1, (uint32_t*)adc_buffer, 2); // Lance l'acquisition DMA en continu
 
-  //==================================================================//
- //                        PARTIE ÉNERGIE PILE                       //
-//==================================================================//
-
-  // MISE EN VEILLE
-  //Nettoyage de sécurité au démarrage
-  __HAL_RTC_WAKEUPTIMER_CLEAR_FLAG(&hrtc, RTC_FLAG_WUTF);
-    HAL_RTCEx_DeactivateWakeUpTimer(&hrtc);
-
-    //Forcer l'activation de l'interruption RTC dans le contrôleur de la puce (NVIC)
-    // Même si CubeMX est censé le faire, cette ligne sécurise le coup
-    HAL_NVIC_SetPriority(RTC_TAMP_IRQn, 0, 0);
-    HAL_NVIC_EnableIRQ(RTC_TAMP_IRQn);
 
   /* USER CODE END 2 */
 
@@ -202,11 +158,10 @@ int main(void)
 	      {
 	          adc_ready = 0;   // on remet le flag à 0
 
-	  // Lecture DMA : les valeurs sont mises à jour automatiquement en fond de tâche
-	  adc_32  = adc_buffer[0];
 
-	  adc_value     = adc_32&0xFFFF;   // IN5 (PA5) — LDR luminosité (16 bits poids faible)
-	  adc_bat_value = (adc_32&0xFFFF0000)>>16;   // IN4 (PA4) — pont diviseur batterie (16 bits poids fort)
+
+	  adc_value     = adc_buffer[0];   // IN5 (PA5) — LDR luminosité (16 bits poids faible)
+
 
 
       //==================================================================//
@@ -232,92 +187,29 @@ int main(void)
       //Décomposition pour affichage sans %f
           int volt_entier = (int)voltage;
           int volt_dec    = (int)((voltage - volt_entier) * 100);
-          int rldr_kohm   = (int)(R_ldr / 1000.0f);
-          int lux_entier  = (int)lux;
-          int lux_dec     = (int)((lux - lux_entier) * 10);
-
-          //==================================================================//
-         //                        PARTIE ÉNERGIE PILE                       //
-        //==================================================================//
 
 
-
-//Tension sur la PIN PA0 (entre 0 et 3.3V car elle ne prend que 3.3V)
-          v_bat_measurer = ((float)adc_bat_value) * VCC / 4095.0;
-
-
-// Tension Réel des piles (Application du Coef)
-          //Si besoin d'un OFFSET
-          v_bat_lisse = (v_bat_measurer * PDP_Bat_Coef) + OFFSET_BAT;
-
-          HAL_Delay(100);
-
-      //Calcul du pourcentage (Produit en croix entre V_MIN et V_MAX) -- Calcul linéaire -- pas bon car les piles n'ont pas une courbe linéaire
-      if (v_bat_lisse > V_MIN){
- /*   	  bat_pourcentage = (int)(((v_bat_lisse - V_MIN)/(V_MAX - V_MIN))*100.0f);
-   */
-    	  bat_pourcentage =(-31.4f *v_bat_lisse * v_bat_lisse * v_bat_lisse)+(483.0f * v_bat_lisse * v_bat_lisse) -(2389.0f * v_bat_lisse) + 3842.0f;
-      } else {
-    	  bat_pourcentage = 0;
-      }
-
-      // Sécurité pour ne pas afficher 102% ou -2%
-          if (bat_pourcentage > 100) bat_pourcentage = 100;
-          if (bat_pourcentage < 0)   bat_pourcentage = 0;
-
-      //Décomposition pour affichage sans %f
-          int v_entier = (int)v_bat_lisse;
-          int v_dec = (int)((v_bat_lisse - v_entier) * 100);
 
           //==================================================================//
          //                       AFFICHAGE LIAISON SÉRIE                    //
         //==================================================================//
 
+       // On regarde si 1000 ms se sont écoulées depuis le dernier envoi
+          if (HAL_GetTick() - dernier_envoi >= 1000)
+              {
          //Affichage Luminosité
        // Affichage sur le PC  (USART2)
       // On affiche l'entier (int)lux pour être sûr que ça s'affiche sans config spéciale
-        int len = sprintf(msg, "ADC:%4lu | V:%d.%02dV | R_ldr:%d kohm | Lux:%d.%d\r\n", adc_value, volt_entier, volt_dec, rldr_kohm, lux_entier, lux_dec);
+        int len = sprintf(msg, "ADC:%4lu | V:%d.%02dV\r\n ", adc_value, volt_entier, volt_dec);
           HAL_UART_Transmit(&huart2, (uint8_t*)msg, len, HAL_MAX_DELAY);
 
-          //Affichage Batterie Restante
-          int len2 = sprintf(msg, "BAT: %4lu | Tension: %d.%02dV | Energie: %d%%\r\n\r\n",
-                  adc_bat_value, v_entier, v_dec, bat_pourcentage); // ancienne partie de code
-        		//  //adc_bat_value, v_entier, v_dec, mon_pourcentage);
-            HAL_UART_Transmit(&huart2, (uint8_t*)msg, len2, 100);
-
- /*        //test une trame
-          HAL_UART_Transmit(&huart2, (uint8_t*)"C",1, HAL_MAX_DELAY);
-
-             HAL_Delay(1000);
-*/
+          // On met à jour le chronomètre pour le prochain coup
+                          dernier_envoi = HAL_GetTick();
 
 
 
-              //==================================================================//
-             //               		MISE EN VEILLE PROCESSEUR                    //
-            //==================================================================//
 
-             // Nettoyage des flags RTC
-             HAL_PWR_EnableBkUpAccess();
-             HAL_RTCEx_DeactivateWakeUpTimer(&hrtc);
-             __HAL_RTC_WAKEUPTIMER_CLEAR_FLAG(&hrtc, RTC_FLAG_WUTF);
-             EXTI->RPR1 = (1 << 19);
-             EXTI->FPR1 = (1 << 19);
-
-             // Armement : 299 = 5 minutes à 1Hz (RTC_WAKEUPCLOCK_CK_SPRE_16BITS)
-             // Pour 5 min : valeur = (5 * 60) - 1 = 299
-             // Pour 10 min : valeur = (10 * 60) - 1 = 599
-             if (HAL_RTCEx_SetWakeUpTimer_IT(&hrtc, 9,
-                     RTC_WAKEUPCLOCK_CK_SPRE_16BITS, 0) == HAL_OK)
-             {
-                 Aller_Au_Dodo();
-             }
-             else
-             {
-                 NVIC_SystemReset();
-
-	      }
-
+              }
 	      }
 
    }
@@ -345,10 +237,9 @@ void SystemClock_Config(void)
   /** Initializes the RCC Oscillators according to the specified parameters
   * in the RCC_OscInitTypeDef structure.
   */
-  RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_HSI|RCC_OSCILLATORTYPE_LSI;
+  RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_HSI;
   RCC_OscInitStruct.HSIState = RCC_HSI_ON;
   RCC_OscInitStruct.HSICalibrationValue = RCC_HSICALIBRATION_DEFAULT;
-  RCC_OscInitStruct.LSIState = RCC_LSI_ON;
   RCC_OscInitStruct.PLL.PLLState = RCC_PLL_NONE;
   if (HAL_RCC_OscConfig(&RCC_OscInitStruct) != HAL_OK)
   {
@@ -482,51 +373,6 @@ static void MX_DAC1_Init(void)
 }
 
 /**
-  * @brief RTC Initialization Function
-  * @param None
-  * @retval None
-  */
-static void MX_RTC_Init(void)
-{
-
-  /* USER CODE BEGIN RTC_Init 0 */
-
-  /* USER CODE END RTC_Init 0 */
-
-  /* USER CODE BEGIN RTC_Init 1 */
-
-  /* USER CODE END RTC_Init 1 */
-
-  /** Initialize RTC Only
-  */
-  hrtc.Instance = RTC;
-  hrtc.Init.HourFormat = RTC_HOURFORMAT_24;
-  hrtc.Init.AsynchPrediv = 127;
-  hrtc.Init.SynchPrediv = 255;
-  hrtc.Init.OutPut = RTC_OUTPUT_DISABLE;
-  hrtc.Init.OutPutRemap = RTC_OUTPUT_REMAP_NONE;
-  hrtc.Init.OutPutPolarity = RTC_OUTPUT_POLARITY_HIGH;
-  hrtc.Init.OutPutType = RTC_OUTPUT_TYPE_OPENDRAIN;
-  hrtc.Init.OutPutPullUp = RTC_OUTPUT_PULLUP_NONE;
-  hrtc.Init.BinMode = RTC_BINARY_NONE;
-  if (HAL_RTC_Init(&hrtc) != HAL_OK)
-  {
-    Error_Handler();
-  }
-
-  /** Enable the WakeUp
-  */
-  if (HAL_RTCEx_SetWakeUpTimer_IT(&hrtc, 0, RTC_WAKEUPCLOCK_RTCCLK_DIV16, 0) != HAL_OK)
-  {
-    Error_Handler();
-  }
-  /* USER CODE BEGIN RTC_Init 2 */
-
-  /* USER CODE END RTC_Init 2 */
-
-}
-
-/**
   * @brief USART2 Initialization Function
   * @param None
   * @retval None
@@ -630,7 +476,7 @@ static void MX_GPIO_Init(void)
 }
 
 /* USER CODE BEGIN 4 */
-
+/*
 // Cette fonction publique appelle la fonction privée MX_GPIO_Init
 void Public_MX_GPIO_Init(void)
 {
@@ -642,7 +488,15 @@ void Public_MX_USART2_UART_Init(void)
 {
     MX_USART2_UART_Init();
 }
+*/
 
+void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef *hadc)
+{
+    if (hadc->Instance == ADC1)
+    {
+        adc_ready = 1; // On lève le drapeau pour la boucle while(1)
+    }
+}
 /* USER CODE END 4 */
 
 /**
