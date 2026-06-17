@@ -195,7 +195,7 @@ int main(void)
          //Affichage Luminosité
        // Affichage sur le PC  (USART2)
       // On affiche l'entier (int)lux pour être sûr que ça s'affiche sans config spéciale
-        int len = sprintf(msg, "Lux:%d.%d\r\n ", lux_entier, lux_dec);
+        int len = sprintf(msg, "Lux:%d.%d\r\n", lux_entier, lux_dec);
           HAL_UART_Transmit(&huart2, (uint8_t*)msg, len, HAL_MAX_DELAY);
 
           // On met à jour le chronomètre pour le prochain coup
